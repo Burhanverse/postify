@@ -2,7 +2,8 @@ import Agenda, { Job } from "agenda";
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
 import { PostModel } from "../models/Post.js";
-import { publishPost } from "./publisher.js";
+// Import publisher (ensure extension for ESM resolution)
+import { publishPost, deletePublishedPost } from "./publisher";
 import { DateTime } from "luxon";
 
 let agenda: Agenda;
@@ -20,6 +21,11 @@ export async function initAgenda() {
     if (!post) return;
     try {
       await publishPost(post);
+      if (post.autoDeleteAt) {
+        await agenda.schedule(post.autoDeleteAt, "auto_delete_post", {
+          postId,
+        });
+      }
     } catch (err) {
       logger.error({ err }, "Failed to publish post");
     }
@@ -27,8 +33,8 @@ export async function initAgenda() {
 
   agenda.define("auto_delete_post", async (job: Job) => {
     const { postId } = job.attrs.data as { postId: string };
-    // TODO implement deletion via Telegram API
-    logger.info({ postId }, "Auto delete placeholder");
+    await deletePublishedPost(postId);
+    logger.info({ postId }, "Auto delete executed");
   });
 
   await agenda.start();

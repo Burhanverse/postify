@@ -1,8 +1,8 @@
-import { PostModel, Post } from "../models/Post.js";
-import { logger } from "../utils/logger.js";
-import { bot } from "../telegram/bot.js";
+import { PostModel, Post } from "../models/Post";
+import { logger } from "../utils/logger";
+import { bot } from "../telegram/bot";
 import { InlineKeyboard } from "grammy";
-import { ChannelModel } from "../models/Channel.js";
+import { ChannelModel } from "../models/Channel";
 
 export async function publishPost(post: Post) {
   const channel = await ChannelModel.findById(post.channel);
@@ -41,7 +41,7 @@ export async function publishPost(post: Post) {
       post.poll.options || [],
       {
         allows_multiple_answers: !post.poll.isQuiz,
-        correct_option_id: post.poll.correctOptionId,
+        correct_option_id: post.poll.correctOptionId ?? undefined,
         is_anonymous: false,
       },
     );
@@ -65,4 +65,18 @@ export async function publishPost(post: Post) {
     { postId: post.id, messageId: sent.message_id },
     "Post published",
   );
+}
+
+export async function deletePublishedPost(postId: string) {
+  const post = await PostModel.findById(postId);
+  if (!post || !post.publishedMessageId) return;
+  try {
+    await bot.api.deleteMessage(post.channelChatId!, post.publishedMessageId);
+    await PostModel.updateOne(
+      { _id: post._id },
+      { $set: { status: "deleted" } },
+    );
+  } catch (err) {
+    logger.warn({ err }, "Failed to delete message (maybe already removed)");
+  }
 }

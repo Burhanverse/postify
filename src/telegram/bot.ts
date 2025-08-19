@@ -1,13 +1,16 @@
 import { Bot, session, Context, SessionFlavor } from "grammy";
-import { env } from "../config/env.js";
-import { registerCoreCommands } from "../commands/core.js";
-import { registerPostCommands } from "../commands/posts.js";
-import { registerStatsCommands } from "../commands/stats.js";
-import { registerAdminCommands } from "../commands/admins.js";
-import { userMiddleware } from "../middleware/user.js";
-import { InlineKeyboard } from "grammy";
-import { PostModel } from "../models/Post.js";
-import { logger } from "../utils/logger.js";
+import { env } from "../config/env";
+import { registerCoreCommands } from "../commands/core";
+import { registerPostCommands } from "../commands/posts";
+import { registerStatsCommands } from "../commands/stats";
+import { registerAdminCommands } from "../commands/admins";
+import {
+  registerChannelsCommands,
+  handleChannelCallback,
+} from "../commands/channels";
+import { userMiddleware } from "../middleware/user";
+import { PostModel } from "../models/Post";
+import { logger } from "../utils/logger";
 
 export interface SessionData {
   draft?: {
@@ -27,6 +30,7 @@ export interface SessionData {
       correctOptionId?: number;
     };
   };
+  awaitingChannelRef?: boolean;
 }
 
 function initial(): SessionData {
@@ -44,6 +48,7 @@ registerCoreCommands(bot);
 registerPostCommands(bot);
 registerStatsCommands(bot);
 registerAdminCommands(bot);
+registerChannelsCommands(bot);
 
 // Button click handler & counters
 bot.on("callback_query:data", async (ctx) => {
@@ -57,7 +62,10 @@ bot.on("callback_query:data", async (ctx) => {
     try {
       await ctx.answerCallbackQuery({ text: "Recorded ✅", show_alert: false });
     } catch {}
+    return;
   }
+  // Channel callbacks
+  if (await handleChannelCallback(ctx)) return;
 });
 
 bot.catch((err) => {

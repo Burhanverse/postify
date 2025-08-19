@@ -9,10 +9,17 @@ const ChannelSchema = new Schema(
     inviteLink: String,
     owners: [{ type: Number }], // tg user ids with owner role
     admins: [{ userId: Number, roles: [String] }], // roles: owner, editor, scheduler, analyst
+    permissions: {
+      canPost: Boolean,
+      canEdit: Boolean,
+      canDelete: Boolean,
+    },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },
 );
+
+ChannelSchema.index({ username: 1 });
 
 export type Channel = InferSchemaType<typeof ChannelSchema>;
 export const ChannelModel = model("Channel", ChannelSchema);
