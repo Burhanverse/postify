@@ -16,9 +16,6 @@ A Telegram channel management & scheduling bot (Controller Bot alternative) buil
 | Queues & auto-publish                 | Basic list                   |
 | Auto delete                           | Implemented (job)            |
 | Inline buttons (no counters)          | Implemented                  |
-| Polls/quizzes                         | Removed (out of scope)       |
-| Analytics (views, clicks)             | Removed (out of scope)       |
-| CSV/JSON export                       | Removed (analytics removed)  |
 | Role-based multi-admin                | Basic (list/add/remove)      |
 
 ## Development
