@@ -1,25 +1,70 @@
-# Minimal production image
-FROM node:20-alpine AS deps
+# Dependencies stage
+FROM node:22-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* pnpm-lock.yaml* yarn.lock* ./
-RUN npm install --production=false || true
 
-FROM node:20-alpine AS build
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci --include=dev
+
+# Build stage
+FROM node:22-alpine AS build
 WORKDIR /app
-ENV NODE_ENV=development
+
+# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY package.json tsconfig.json ./
+
+# Copy source files
+COPY package.json tsconfig.json post-build.mjs ./
 COPY src ./src
+
+# Build the application
 RUN npm run build
 
-FROM node:20-alpine AS runner
+# Production dependencies stage
+FROM node:22-alpine AS prod-deps
 WORKDIR /app
+
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install only production dependencies
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Runtime stage
+FROM node:22-alpine AS runner
+WORKDIR /app
+
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
+# Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
-COPY package.json ./
+
+# Create non-root user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S postify -u 1001
+
+# Copy built application
 COPY --from=build /app/dist ./dist
-COPY --from=deps /app/node_modules ./node_modules
-COPY .env.example ./.env.example
+COPY --from=prod-deps /app/node_modules ./node_modules
+COPY package.json ./
+
+# Change ownership to non-root user
+RUN chown -R postify:nodejs /app
+USER postify
+
+# Expose port
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=3s --retries=3 CMD wget -qO- "http://localhost:$PORT/docs?format=json" || exit 1
+
+# Add healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:$PORT/ || exit 1
+
+# Start the application
 CMD ["node", "dist/index.js"]
