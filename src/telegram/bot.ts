@@ -26,7 +26,8 @@ export interface SessionData {
   awaitingChannelRef?: boolean;
   selectedChannelChatId?: number; // user-selected active channel
   draftPreviewMessageId?: number; // message id of interactive draft preview
-  lastDraftTextMessageId?: number; // track last text message for edit detection
+  lastDraftTextMessageId?: number; // (legacy single id - kept for backward compatibility)
+  draftSourceMessages?: { id: number; html: string }[]; // list of user message ids & formatted html composing draft
   draftEditMode?:
     | "text"
     | "button"

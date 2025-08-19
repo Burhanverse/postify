@@ -6,6 +6,9 @@ import { ChannelModel } from "../models/Channel";
 import { schedulePost, scheduleRecurring } from "../services/agenda";
 import { formatToHtml } from "../utils/format";
 import { DateTime } from "luxon";
+import { Types } from "mongoose";
+
+type DraftButton = { text: string; url?: string; callbackData?: string };
 
 export function registerPostCommands(bot: Bot<BotContext>) {
   async function renderDraftPreview(ctx: BotContext) {
@@ -127,6 +130,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     ctx.session.draft = { postType: "text", buttons: [] };
     delete ctx.session.draftPreviewMessageId;
     delete ctx.session.lastDraftTextMessageId;
+  ctx.session.draftSourceMessages = [];
     await ctx.reply(
       "📝 **Interactive draft started!**\n\n" +
       "Send text to add to your draft. Use HTML tags for formatting:\n" +
@@ -136,7 +140,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       "• `<pre>code block</pre>` for code blocks\n" +
       "• `<blockquote>quote</blockquote>` for quotes\n\n" +
       "Use buttons below to configure, then **Send Now** to post immediately or schedule for later:",
-      { parse_mode: "HTML" }
+      { parse_mode: "Markdown" }
     );
     await renderDraftPreview(ctx);
   });
@@ -162,6 +166,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     ctx.session.draft = { postType: "text", buttons: [] };
     delete ctx.session.draftPreviewMessageId;
     delete ctx.session.lastDraftTextMessageId;
+  ctx.session.draftSourceMessages = [];
     await ctx.reply("Draft cleared.");
     await renderDraftPreview(ctx);
   });
@@ -170,6 +175,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     delete ctx.session.draft;
     delete ctx.session.draftPreviewMessageId;
     delete ctx.session.lastDraftTextMessageId;
+  delete ctx.session.draftSourceMessages;
     await ctx.reply("Draft cancelled.");
   });
 
@@ -256,20 +262,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (ctx.session.draft) {
       const raw = ctx.message.text;
       const html = formatToHtml(raw);
-      
-      // Check if this is the same message (edit) or new message
-      const currentMessageId = ctx.message.message_id;
-      const isEdit = ctx.session.lastDraftTextMessageId === currentMessageId;
-      
-      if (isEdit) {
-        // Replace existing text for edits
-        ctx.session.draft.text = html;
-      } else {
-        // Append for new messages
-        ctx.session.draft.text = ctx.session.draft.text ? ctx.session.draft.text + "\n" + html : html;
-        ctx.session.lastDraftTextMessageId = currentMessageId;
-      }
-      
+  const msgId = ctx.message.message_id;
+  if (!ctx.session.draftSourceMessages) ctx.session.draftSourceMessages = [];
+  // Add new source message
+  ctx.session.draftSourceMessages.push({ id: msgId, html });
+  ctx.session.draft.text = ctx.session.draftSourceMessages.map(m => m.html).join("\n");
       await renderDraftPreview(ctx);
       return;
     }
@@ -279,13 +276,14 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   // Handle edited text messages for drafts
   bot.on("edited_message:text", async (ctx, next) => {
     if (!ctx.session.draft) return next();
-    
     const editedMessageId = ctx.editedMessage.message_id;
-    if (ctx.session.lastDraftTextMessageId === editedMessageId) {
-      const raw = ctx.editedMessage.text;
-      const html = formatToHtml(raw);
-      ctx.session.draft.text = html; // Replace with edited content
-      await renderDraftPreview(ctx);
+    if (ctx.session.draftSourceMessages) {
+      const entry = ctx.session.draftSourceMessages.find(m => m.id === editedMessageId);
+      if (entry) {
+        entry.html = formatToHtml(ctx.editedMessage.text);
+        ctx.session.draft.text = ctx.session.draftSourceMessages.map(m => m.html).join("\n");
+        await renderDraftPreview(ctx);
+      }
     }
     return next();
   });
@@ -302,9 +300,29 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "type") {
       ctx.session.draft.postType = value as "text" | "photo" | "video";
       if (value === "text") delete ctx.session.draft.mediaFileId;
-      delete ctx.session.lastDraftTextMessageId; // Clear tracking on type change
+      delete ctx.session.lastDraftTextMessageId;
+      ctx.session.draftSourceMessages = [];
       await ctx.answerCallbackQuery();
       await renderDraftPreview(ctx);
+      return;
+    }
+    if (action === "send") {
+      // Show send submenu
+      const kb = new InlineKeyboard()
+        .text("📤 Now", "draft:sendnow")
+        .text("⏰ Schedule", "draft:schedule")
+        .row()
+        .text("🔁 Recurring", "draft:cron")
+        .row()
+        .text("⬅ Back", "draft:back");
+      try {
+        if (ctx.session.draftPreviewMessageId) {
+          await ctx.api.editMessageReplyMarkup(ctx.chat!.id, ctx.session.draftPreviewMessageId, { reply_markup: kb });
+        } else {
+          await ctx.editMessageReplyMarkup({ reply_markup: kb });
+        }
+      } catch {}
+      await ctx.answerCallbackQuery();
       return;
     }
     if (action === "managebtns") {
@@ -370,6 +388,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "clear") {
       ctx.session.draft = { postType: "text", buttons: [] };
       delete ctx.session.lastDraftTextMessageId;
+  ctx.session.draftSourceMessages = [];
       await ctx.answerCallbackQuery({ text: "Cleared" });
       await renderDraftPreview(ctx);
       return;
@@ -378,6 +397,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.draft;
       delete ctx.session.draftPreviewMessageId;
       delete ctx.session.lastDraftTextMessageId;
+  delete ctx.session.draftSourceMessages;
       await ctx.answerCallbackQuery({ text: "Cancelled" });
       return;
     }
@@ -431,11 +451,12 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         
         // Publish immediately using the publisher service
         const { publishPost } = await import("../services/publisher");
-        await publishPost(post as any);
+  await publishPost(post as unknown as (import("../models/Post").Post & { _id: Types.ObjectId }));
         
         delete ctx.session.draft;
         delete ctx.session.draftPreviewMessageId;
         delete ctx.session.lastDraftTextMessageId;
+  delete ctx.session.draftSourceMessages;
         
         await ctx.answerCallbackQuery({ text: "✅ Posted successfully!" });
         await ctx.editMessageText("✅ Post sent successfully to channel!");
@@ -480,10 +501,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           idx >= 0 &&
           idx < ctx.session.draft.buttons.length
         ) {
-          ctx.session.draft.buttons[idx] = newBtn as any;
+          ctx.session.draft.buttons[idx] = newBtn as DraftButton;
           await ctx.reply("Button updated");
         } else {
-          ctx.session.draft.buttons?.push(newBtn as any);
+          ctx.session.draft.buttons?.push(newBtn as DraftButton);
           await ctx.reply("Button added");
         }
         ctx.session.draftEditMode = null;
