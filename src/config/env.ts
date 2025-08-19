@@ -1,21 +1,24 @@
-import dotenv from 'dotenv';
-import { z } from 'zod';
+import dotenv from "dotenv";
+import { z } from "zod";
 
 dotenv.config();
 
 const EnvSchema = z.object({
   BOT_TOKEN: z.string().min(10),
   MONGODB_URI: z.string().url(),
-  DB_NAME: z.string().min(1).default('postify'),
+  DB_NAME: z.string().min(1).default("postify"),
   APP_BASE_URL: z.string().url().optional(),
-  LOG_LEVEL: z.string().default('info')
+  LOG_LEVEL: z.string().default("info"),
 });
 
 type Env = z.infer<typeof EnvSchema>;
 
 const parsed = EnvSchema.safeParse(process.env);
 if (!parsed.success) {
-  console.error('Invalid environment variables', parsed.error.flatten().fieldErrors);
+  console.error(
+    "Invalid environment variables",
+    parsed.error.flatten().fieldErrors,
+  );
   process.exit(1);
 }
 
