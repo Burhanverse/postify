@@ -1,11 +1,11 @@
 import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import mongoose from "mongoose";
-import { getAgenda } from "./services/agenda.js";
-import { env } from "./config/env.js";
-import { logger } from "./utils/logger.js";
-import { PostModel } from "./models/Post.js";
-import { ChannelModel } from "./models/Channel.js";
-import { UserModel } from "./models/User.js";
+import { getAgenda } from "./services/agenda";
+import { env } from "./config/env";
+import { logger } from "./utils/logger";
+import { PostModel } from "./models/Post";
+import { ChannelModel } from "./models/Channel";
+import { UserModel } from "./models/User";
 
 export function createServer(): FastifyInstance {
   const app = Fastify({ logger: false });

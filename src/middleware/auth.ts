@@ -1,5 +1,5 @@
 // Placeholder for role-based access control middleware
-import { BotContext } from "../telegram/bot.js";
+import { BotContext } from "../telegram/bot";
 
 export function requireRole(role: string) {
   return async (ctx: BotContext, next: () => Promise<void>) => {

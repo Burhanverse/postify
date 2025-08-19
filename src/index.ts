@@ -1,9 +1,9 @@
-import { connectDb } from "./services/db.js";
-import { initAgenda } from "./services/agenda.js";
-import { launchBot } from "./telegram/bot.js";
-import { logger } from "./utils/logger.js";
-import { env } from "./config/env.js";
-import { startHttpServer } from "./server.js";
+import { connectDb } from "./services/db";
+import { initAgenda } from "./services/agenda";
+import { launchBot } from "./telegram/bot";
+import { logger } from "./utils/logger";
+import { env } from "./config/env";
+import { startHttpServer } from "./server";
 
 async function main() {
   await connectDb();

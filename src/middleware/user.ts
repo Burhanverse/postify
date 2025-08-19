@@ -1,5 +1,5 @@
-import { UserModel } from "../models/User.js";
-import { BotContext } from "../telegram/bot.js";
+import { UserModel } from "../models/User";
+import { BotContext } from "../telegram/bot";
 
 export async function userMiddleware(
   ctx: BotContext,

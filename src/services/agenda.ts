@@ -1,7 +1,7 @@
 import Agenda, { Job } from "agenda";
-import { env } from "../config/env.js";
-import { logger } from "../utils/logger.js";
-import { PostModel } from "../models/Post.js";
+import { env } from "../config/env";
+import { logger } from "../utils/logger";
+import { PostModel } from "../models/Post";
 // Import publisher (ensure extension for ESM resolution)
 import { publishPost, deletePublishedPost } from "./publisher";
 import { DateTime } from "luxon";
