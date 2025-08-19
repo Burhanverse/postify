@@ -5,6 +5,7 @@ import { PostModel } from "../models/Post.js";
 // Import publisher (ensure extension for ESM resolution)
 import { publishPost, deletePublishedPost } from "./publisher";
 import { DateTime } from "luxon";
+// (Cron validation removed with analytics cleanup; rely on Agenda to handle schedule format)
 
 let agenda: Agenda;
 
@@ -48,4 +49,20 @@ export async function schedulePost(
 ) {
   const dt = DateTime.fromJSDate(date).setZone(timezone);
   await agenda.schedule(dt.toJSDate(), "publish_post", { postId });
+}
+
+export async function scheduleRecurring(
+  postId: string,
+  cron: string,
+  timezone: string,
+) {
+  await agenda.every(cron, "publish_post", { postId }, { timezone });
+}
+
+export async function listScheduled(limit = 20) {
+  return agenda.jobs(
+    { name: "publish_post", nextRunAt: { $ne: null } },
+    { nextRunAt: 1 },
+    limit,
+  );
 }

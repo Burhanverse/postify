@@ -16,28 +16,30 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "grammy": "^1.24.0",
     "@grammyjs/menu": "^1.2.1",
     "@grammyjs/runner": "^1.0.4",
+    "agenda": "^5.0.0",
+    "cron-parser": "^5.0.3",
+    "csv-stringify": "^6.5.0",
+    "dotenv": "^16.4.5",
+    "grammy": "^1.24.0",
+    "luxon": "^3.5.0",
     "mongodb": "^6.8.0",
     "mongoose": "^8.5.3",
-    "zod": "^3.23.8",
-    "dotenv": "^16.4.5",
     "pino": "^9.2.0",
     "pino-pretty": "^11.2.2",
-    "agenda": "^5.0.0",
-    "luxon": "^3.5.0",
-    "csv-stringify": "^6.5.0"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^5.6.2",
-    "tsx": "^4.15.7",
-    "eslint": "^9.9.0",
-    "@typescript-eslint/parser": "^8.0.1",
-    "@typescript-eslint/eslint-plugin": "^8.0.1",
-    "prettier": "^3.3.2",
+    "@types/luxon": "^3.7.1",
     "@types/node": "^20.14.10",
-    "vitest": "^1.6.0",
-    "rimraf": "^5.0.5"
+    "@typescript-eslint/eslint-plugin": "^8.0.1",
+    "@typescript-eslint/parser": "^8.0.1",
+    "eslint": "^9.9.0",
+    "prettier": "^3.3.2",
+    "rimraf": "^5.0.5",
+    "tsx": "^4.15.7",
+    "typescript": "^5.6.2",
+    "vitest": "^1.6.0"
   }
 }

@@ -2,7 +2,6 @@ import { Bot, session, Context, SessionFlavor } from "grammy";
 import { env } from "../config/env";
 import { registerCoreCommands } from "../commands/core";
 import { registerPostCommands } from "../commands/posts";
-import { registerStatsCommands } from "../commands/stats";
 import { registerAdminCommands } from "../commands/admins";
 import {
   registerChannelsCommands,
@@ -14,7 +13,7 @@ import { logger } from "../utils/logger";
 
 export interface SessionData {
   draft?: {
-    postType?: "text" | "photo" | "video" | "poll";
+    postType?: "text" | "photo" | "video";
     text?: string;
     mediaFileId?: string;
     buttons?: {
@@ -23,14 +22,17 @@ export interface SessionData {
       callbackData?: string;
       counterKey?: string;
     }[];
-    poll?: {
-      question: string;
-      options: string[];
-      isQuiz?: boolean;
-      correctOptionId?: number;
-    };
   };
   awaitingChannelRef?: boolean;
+  selectedChannelChatId?: number; // user-selected active channel
+  draftPreviewMessageId?: number; // message id of interactive draft preview
+  draftEditMode?:
+    | "text"
+    | "button"
+    | "schedule_time"
+    | "cron"
+    | "auto_delete"
+    | null;
 }
 
 function initial(): SessionData {
@@ -46,24 +48,12 @@ bot.use(userMiddleware);
 
 registerCoreCommands(bot);
 registerPostCommands(bot);
-registerStatsCommands(bot);
 registerAdminCommands(bot);
 registerChannelsCommands(bot);
 
-// Button click handler & counters
+// Callback dispatcher (channel UI & generic buttons disabled counters)
 bot.on("callback_query:data", async (ctx) => {
   const data = ctx.callbackQuery.data;
-  if (data?.startsWith("btn:")) {
-    const [, postId, key] = data.split(":");
-    await PostModel.updateOne(
-      { _id: postId },
-      { $inc: { [`buttonClicks.${key}`]: 1 } },
-    );
-    try {
-      await ctx.answerCallbackQuery({ text: "Recorded ✅", show_alert: false });
-    } catch {}
-    return;
-  }
   // Channel callbacks
   if (await handleChannelCallback(ctx)) return;
 });

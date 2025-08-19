@@ -12,7 +12,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
   bot.command("help", async (ctx) => {
     await ctx.reply(
-      "/addchannel - connect a channel\n/channels - list your channels\n/newpost - create a draft\n/schedule - schedule last draft\n/queue - list scheduled posts\n/stats - get stats\n/admins - manage channel admins",
+      "/addchannel - connect a channel\n/channels - list your channels\n/usechannel <chatId> - set active channel\n/newpost - create a draft\n/addbutton - add a button to draft\n/preview - preview current draft\n/schedule [in <min>|ISO] - schedule draft\n/recurring <cron> - schedule recurring draft\n/queue - list scheduled posts\n/editpost <id> - load scheduled post into draft\n/deletepost <id> - delete a scheduled post\n/admins - list admins\n/addadmin <id> <roles> - add/update admin\n/rmadmin <id> - remove admin",
     );
   });
 
@@ -59,7 +59,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
         title = chatShape.title;
         type = chat.type;
         // Try to fetch invite link if bot is admin (private channel with public username can't have invite link retrieved without admin)
-        if ((chat as any).type === "channel") {
+        if ((chat as { type: string }).type === "channel") {
           // noop
         }
       } catch (err) {
@@ -124,11 +124,16 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     .setMyCommands([
       { command: "addchannel", description: "Connect a channel" },
       { command: "channels", description: "List connected channels" },
+      { command: "usechannel", description: "Select active channel" },
       { command: "newpost", description: "Create a draft" },
+      { command: "addbutton", description: "Add button to draft" },
+      { command: "preview", description: "Preview draft" },
       { command: "schedule", description: "Schedule last draft" },
+      { command: "recurring", description: "Schedule recurring draft" },
       { command: "queue", description: "List scheduled posts" },
-      { command: "stats", description: "Get statistics" },
       { command: "admins", description: "Manage channel admins" },
+      { command: "addadmin", description: "Grant roles to user" },
+      { command: "rmadmin", description: "Remove admin user" },
     ])
     .catch((err) => logger.error({ err }, "setMyCommands failed"));
 }

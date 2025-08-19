@@ -4,22 +4,22 @@ A Telegram channel management & scheduling bot (Controller Bot alternative) buil
 
 ## Features (Roadmap)
 
-| Area                                         | Status              |
-| -------------------------------------------- | ------------------- |
-| Channel connection (public & private)        | Planned             |
-| Permission checks (admin rights)             | Planned             |
-| Multiple channels per admin                  | Planned             |
-| Draft creation (text, media, polls, buttons) | Partial (text)      |
-| Post editing & deletion                      | Planned             |
-| Crossposting / forwarding                    | Planned             |
-| Scheduling & recurring (cron)                | Scaffolded (Agenda) |
-| Queues & auto-publish                        | Planned             |
-| Auto delete                                  | Scaffolded job      |
-| Inline buttons with counters                 | Planned             |
-| Polls/quizzes                                | Planned             |
-| Analytics (views, clicks)                    | Partial (models)    |
-| CSV/JSON export                              | CSV helper stub     |
-| Role-based multi-admin                       | Planned             |
+| Area                                  | Status                       |
+| ------------------------------------- | ---------------------------- |
+| Channel connection (public & private) | Implemented (basic)          |
+| Permission checks (admin rights)      | Basic (post rights)          |
+| Multiple channels per admin           | Implemented                  |
+| Draft creation (text, media, buttons) | Implemented                  |
+| Post editing & deletion               | Pending                      |
+| Crossposting / forwarding             | Pending                      |
+| Scheduling & recurring (cron)         | Basic (one-off, cron helper) |
+| Queues & auto-publish                 | Basic list                   |
+| Auto delete                           | Implemented (job)            |
+| Inline buttons (no counters)          | Implemented                  |
+| Polls/quizzes                         | Removed (out of scope)       |
+| Analytics (views, clicks)             | Removed (out of scope)       |
+| CSV/JSON export                       | Removed (analytics removed)  |
+| Role-based multi-admin                | Basic (list/add/remove)      |
 
 ## Development
 

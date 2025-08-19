@@ -1,10 +1,11 @@
 import { PostModel, Post } from "../models/Post";
+import { Types } from "mongoose";
 import { logger } from "../utils/logger";
 import { bot } from "../telegram/bot";
 import { InlineKeyboard } from "grammy";
 import { ChannelModel } from "../models/Channel";
 
-export async function publishPost(post: Post) {
+export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   const channel = await ChannelModel.findById(post.channel);
   if (!channel) return;
   const chatId = channel.chatId;
@@ -15,11 +16,13 @@ export async function publishPost(post: Post) {
       text?: string | null;
       url?: string | null;
       callbackData?: string | null;
-      counterKey?: string | null;
     }) => {
       if (b.url) keyboard.url(b.text || "🔗", b.url);
       else if (b.callbackData)
-        keyboard.text(b.text || "•", `btn:${post.id}:${b.callbackData}`);
+        keyboard.text(
+          b.text || "•",
+          `btn:${post._id.toString()}:${b.callbackData}`,
+        );
     },
   );
 
@@ -34,17 +37,6 @@ export async function publishPost(post: Post) {
       caption: post.text || undefined,
       reply_markup: keyboard,
     });
-  } else if (post.type === "poll" && post.poll) {
-    sent = await bot.api.sendPoll(
-      chatId,
-      post.poll.question || "",
-      post.poll.options || [],
-      {
-        allows_multiple_answers: !post.poll.isQuiz,
-        correct_option_id: post.poll.correctOptionId ?? undefined,
-        is_anonymous: false,
-      },
-    );
   } else {
     sent = await bot.api.sendMessage(chatId, post.text || "", {
       reply_markup: keyboard,
@@ -62,7 +54,7 @@ export async function publishPost(post: Post) {
     },
   );
   logger.info(
-    { postId: post.id, messageId: sent.message_id },
+    { postId: post._id.toString(), messageId: sent.message_id },
     "Post published",
   );
 }
