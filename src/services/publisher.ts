@@ -31,15 +31,18 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     sent = await bot.api.sendPhoto(chatId, post.mediaFileId, {
       caption: post.text || undefined,
       reply_markup: keyboard,
+      parse_mode: "HTML",
     });
   } else if (post.type === "video" && post.mediaFileId) {
     sent = await bot.api.sendVideo(chatId, post.mediaFileId, {
       caption: post.text || undefined,
       reply_markup: keyboard,
+      parse_mode: "HTML",
     });
   } else {
     sent = await bot.api.sendMessage(chatId, post.text || "", {
       reply_markup: keyboard,
+      parse_mode: "HTML",
     });
   }
 

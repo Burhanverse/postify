@@ -58,6 +58,29 @@ Run unit tests:
 npm test
 ```
 
+## Text Formatting
+
+Postify supports rich text formatting using HTML tags:
+
+- `<b>bold text</b>` for **bold**
+- `<i>italic text</i>` for *italic*  
+- `<code>inline code</code>` for `monospace`
+- `<pre>code block</pre>` for code blocks
+- `<blockquote>quoted text</blockquote>` for quotes
+
+Example:
+```
+<b>Hello</b> <i>world</i>! Here's some <code>code</code>:
+
+<pre>
+function hello() {
+  console.log("Hello world!");
+}
+</pre>
+
+<blockquote>This is a quote</blockquote>
+```
+
 ## Structure
 
 ```

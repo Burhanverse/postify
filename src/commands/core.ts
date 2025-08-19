@@ -12,7 +12,28 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
   bot.command("help", async (ctx) => {
     await ctx.reply(
-      "/addchannel - connect a channel\n/channels - list your channels\n/usechannel <chatId> - set active channel\n/newpost - create a draft\n/addbutton - add a button to draft\n/preview - preview current draft\n/schedule [in <min>|ISO] - schedule draft\n/recurring <cron> - schedule recurring draft\n/queue - list scheduled posts\n/editpost <id> - load scheduled post into draft\n/deletepost <id> - delete a scheduled post\n/admins - list admins\n/addadmin <id> <roles> - add/update admin\n/rmadmin <id> - remove admin",
+      "📝 **COMMANDS**\n" +
+      "/addchannel - connect a channel\n" +
+      "/channels - list your channels\n" +
+      "/usechannel <chatId> - set active channel\n" +
+      "/newpost - create a draft (with Send Now option)\n" +
+      "/addbutton - add a button to draft\n" +
+      "/preview - preview current draft\n" +
+      "/schedule [in <min>|ISO] - schedule draft\n" +
+      "/recurring <cron> - schedule recurring draft\n" +
+      "/queue - list scheduled posts\n" +
+      "/editpost <id> - load scheduled post into draft\n" +
+      "/deletepost <id> - delete a scheduled post\n" +
+      "/admins - list admins\n" +
+      "/addadmin <id> <roles> - add/update admin\n" +
+      "/rmadmin <id> - remove admin\n\n" +
+      "✨ **TEXT FORMATTING**\n" +
+      "<b>bold text</b>\n" +
+      "<i>italic text</i>\n" +
+      "<code>inline code</code>\n" +
+      "<pre>code block</pre>\n" +
+      "<blockquote>quoted text</blockquote>",
+      { parse_mode: "HTML" }
     );
   });
 

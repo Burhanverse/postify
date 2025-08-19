@@ -20,11 +20,16 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     kb.text("➕ Button", "draft:addbtn")
       .text("✏️ Buttons", "draft:managebtns")
       .row();
-    kb.text("⏰ Schedule", "draft:schedule")
-      .text("🔁 Recurring", "draft:cron")
+    kb.text("👁 Preview", "draft:preview")
+      .text("🧹 Clear", "draft:clear")
       .row();
-    kb.text("🧹 Clear", "draft:clear").text("✅ Save", "draft:save").row();
-    kb.text("✖️ Cancel", "draft:cancel");
+    // Send section
+    kb.text("� Send Now", "draft:sendnow")
+      .text("⏰ Schedule", "draft:schedule")
+      .row();
+    kb.text("🔁 Recurring", "draft:cron")
+      .text("✖️ Cancel", "draft:cancel")
+      .row();
 
     const caption = d.text || "(empty)";
     try {
@@ -34,20 +39,20 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           await ctx.api.editMessageCaption(
             ctx.chat!.id,
             ctx.session.draftPreviewMessageId,
-            { caption, reply_markup: kb },
+            { caption, reply_markup: kb, parse_mode: "HTML" },
           );
         } else if (d.mediaFileId && d.postType === "video") {
           await ctx.api.editMessageCaption(
             ctx.chat!.id,
             ctx.session.draftPreviewMessageId,
-            { caption, reply_markup: kb },
+            { caption, reply_markup: kb, parse_mode: "HTML" },
           );
         } else {
           await ctx.api.editMessageText(
             ctx.chat!.id,
             ctx.session.draftPreviewMessageId,
             caption,
-            { reply_markup: kb },
+            { reply_markup: kb, parse_mode: "HTML" },
           );
         }
       } else {
@@ -56,21 +61,38 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           sent = await ctx.replyWithPhoto(d.mediaFileId, {
             caption,
             reply_markup: kb,
+            parse_mode: "HTML",
           });
         } else if (d.mediaFileId && d.postType === "video") {
           sent = await ctx.replyWithVideo(d.mediaFileId, {
             caption,
             reply_markup: kb,
+            parse_mode: "HTML",
           });
         } else {
-          sent = await ctx.reply(caption, { reply_markup: kb });
+          sent = await ctx.reply(caption, { reply_markup: kb, parse_mode: "HTML" });
         }
         ctx.session.draftPreviewMessageId = sent.message_id;
       }
     } catch (err) {
       // fallback: re-send if edit failed due to type switch
       try {
-        const sent = await ctx.reply(caption, { reply_markup: kb });
+        let sent;
+        if (d.mediaFileId && d.postType === "photo") {
+          sent = await ctx.replyWithPhoto(d.mediaFileId, {
+            caption,
+            reply_markup: kb,
+            parse_mode: "HTML",
+          });
+        } else if (d.mediaFileId && d.postType === "video") {
+          sent = await ctx.replyWithVideo(d.mediaFileId, {
+            caption,
+            reply_markup: kb,
+            parse_mode: "HTML",
+          });
+        } else {
+          sent = await ctx.reply(caption, { reply_markup: kb, parse_mode: "HTML" });
+        }
         ctx.session.draftPreviewMessageId = sent.message_id;
       } catch {}
     }
@@ -104,8 +126,17 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.command("newpost", async (ctx) => {
     ctx.session.draft = { postType: "text", buttons: [] };
     delete ctx.session.draftPreviewMessageId;
+    delete ctx.session.lastDraftTextMessageId;
     await ctx.reply(
-      "Interactive draft started. Send text (appends). Use the inline buttons below to configure.",
+      "📝 **Interactive draft started!**\n\n" +
+      "Send text to add to your draft. Use HTML tags for formatting:\n" +
+      "• `<b>bold</b>` for **bold**\n" +
+      "• `<i>italic</i>` for *italic*\n" +
+      "• `<code>code</code>` for `code`\n" +
+      "• `<pre>code block</pre>` for code blocks\n" +
+      "• `<blockquote>quote</blockquote>` for quotes\n\n" +
+      "Use buttons below to configure, then **Send Now** to post immediately or schedule for later:",
+      { parse_mode: "HTML" }
     );
     await renderDraftPreview(ctx);
   });
@@ -123,18 +154,22 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   bot.command("preview", async (ctx) => {
     if (!ctx.session.draft) return ctx.reply("No draft");
+    delete ctx.session.draftPreviewMessageId; // Force new preview message
     await renderDraftPreview(ctx);
   });
 
   bot.command("clear", async (ctx) => {
     ctx.session.draft = { postType: "text", buttons: [] };
     delete ctx.session.draftPreviewMessageId;
+    delete ctx.session.lastDraftTextMessageId;
     await ctx.reply("Draft cleared.");
     await renderDraftPreview(ctx);
   });
 
   bot.command("cancel", async (ctx) => {
     delete ctx.session.draft;
+    delete ctx.session.draftPreviewMessageId;
+    delete ctx.session.lastDraftTextMessageId;
     await ctx.reply("Draft cancelled.");
   });
 
@@ -221,9 +256,36 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (ctx.session.draft) {
       const raw = ctx.message.text;
       const html = formatToHtml(raw);
-      ctx.session.draft.text = ctx.session.draft.text ? ctx.session.draft.text + "\n" + html : html;
+      
+      // Check if this is the same message (edit) or new message
+      const currentMessageId = ctx.message.message_id;
+      const isEdit = ctx.session.lastDraftTextMessageId === currentMessageId;
+      
+      if (isEdit) {
+        // Replace existing text for edits
+        ctx.session.draft.text = html;
+      } else {
+        // Append for new messages
+        ctx.session.draft.text = ctx.session.draft.text ? ctx.session.draft.text + "\n" + html : html;
+        ctx.session.lastDraftTextMessageId = currentMessageId;
+      }
+      
       await renderDraftPreview(ctx);
       return;
+    }
+    return next();
+  });
+
+  // Handle edited text messages for drafts
+  bot.on("edited_message:text", async (ctx, next) => {
+    if (!ctx.session.draft) return next();
+    
+    const editedMessageId = ctx.editedMessage.message_id;
+    if (ctx.session.lastDraftTextMessageId === editedMessageId) {
+      const raw = ctx.editedMessage.text;
+      const html = formatToHtml(raw);
+      ctx.session.draft.text = html; // Replace with edited content
+      await renderDraftPreview(ctx);
     }
     return next();
   });
@@ -240,6 +302,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "type") {
       ctx.session.draft.postType = value as "text" | "photo" | "video";
       if (value === "text") delete ctx.session.draft.mediaFileId;
+      delete ctx.session.lastDraftTextMessageId; // Clear tracking on type change
       await ctx.answerCallbackQuery();
       await renderDraftPreview(ctx);
       return;
@@ -306,6 +369,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "clear") {
       ctx.session.draft = { postType: "text", buttons: [] };
+      delete ctx.session.lastDraftTextMessageId;
       await ctx.answerCallbackQuery({ text: "Cleared" });
       await renderDraftPreview(ctx);
       return;
@@ -313,6 +377,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "cancel") {
       delete ctx.session.draft;
       delete ctx.session.draftPreviewMessageId;
+      delete ctx.session.lastDraftTextMessageId;
       await ctx.answerCallbackQuery({ text: "Cancelled" });
       return;
     }
@@ -328,8 +393,59 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       await ctx.answerCallbackQuery({ text: "Send cron expression (UTC)" });
       return;
     }
+    if (action === "preview") {
+      delete ctx.session.draftPreviewMessageId; // Force new preview message
+      await ctx.answerCallbackQuery({ text: "Generating fresh preview..." });
+      await renderDraftPreview(ctx);
+      return;
+    }
+    if (action === "sendnow") {
+      // Immediate send without scheduling
+      if (!ctx.session.draft?.text && !ctx.session.draft?.mediaFileId) {
+        await ctx.answerCallbackQuery({ text: "Draft is empty! Add text or media first." });
+        return;
+      }
+      
+      const channel = await ChannelModel.findOne({
+        chatId: ctx.session.selectedChannelChatId,
+        owners: ctx.from?.id,
+      }) || await ChannelModel.findOne({ owners: ctx.from?.id });
+      
+      if (!channel) {
+        await ctx.answerCallbackQuery({ text: "No linked channel! Use /addchannel first." });
+        return;
+      }
+      
+      try {
+        const post = await PostModel.create({
+          channel: channel._id,
+          channelChatId: channel.chatId,
+          authorTgId: ctx.from?.id,
+          status: "published",
+          type: ctx.session.draft.postType || "text",
+          text: ctx.session.draft.text,
+          mediaFileId: ctx.session.draft.mediaFileId,
+          buttons: ctx.session.draft.buttons,
+          publishedAt: new Date(),
+        });
+        
+        // Publish immediately using the publisher service
+        const { publishPost } = await import("../services/publisher");
+        await publishPost(post as any);
+        
+        delete ctx.session.draft;
+        delete ctx.session.draftPreviewMessageId;
+        delete ctx.session.lastDraftTextMessageId;
+        
+        await ctx.answerCallbackQuery({ text: "✅ Posted successfully!" });
+        await ctx.editMessageText("✅ Post sent successfully to channel!");
+      } catch (error) {
+        await ctx.answerCallbackQuery({ text: "❌ Failed to send post" });
+      }
+      return;
+    }
     if (action === "save") {
-      await ctx.answerCallbackQuery({ text: "Use /schedule or /recurring" });
+      await ctx.answerCallbackQuery({ text: "Use Send Now, Schedule, or Recurring" });
       return;
     }
   });
