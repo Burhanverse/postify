@@ -10,7 +10,7 @@ export async function publishPost(post: Post) {
   const chatId = channel.chatId;
 
   const keyboard = new InlineKeyboard();
-  post.buttons?.forEach((b: any) => { // TODO strong type
+  post.buttons?.forEach((b: { text?: string | null; url?: string | null; callbackData?: string | null; counterKey?: string | null }) => {
     if (b.url) keyboard.url(b.text || '🔗', b.url);
     else if (b.callbackData) keyboard.text(b.text || '•', `btn:${post.id}:${b.callbackData}`);
   });

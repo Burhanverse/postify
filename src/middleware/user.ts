@@ -11,7 +11,7 @@ export async function userMiddleware(ctx: BotContext, next: () => Promise<void>)
           username: from.username,
           firstName: from.first_name,
           lastName: from.last_name,
-          languageCode: (from as any).language_code
+          languageCode: from.language_code
         }
       },
       { upsert: true }

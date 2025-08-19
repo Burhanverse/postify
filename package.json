@@ -7,16 +7,16 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "build": "npm run clean && tsc -p tsconfig.json",
     "lint": "eslint . --ext .ts",
-  "format": "prettier --write .",
-  "test": "vitest run"
+    "format": "prettier --write .",
+    "test": "vitest run"
   },
   "dependencies": {
     "grammy": "^1.24.0",
     "@grammyjs/menu": "^1.2.1",
     "@grammyjs/runner": "^1.0.4",
-    "@grammyjs/session": "^1.10.1",
     "mongodb": "^6.8.0",
     "mongoose": "^8.5.3",
     "zod": "^3.23.8",
@@ -28,13 +28,14 @@
     "csv-stringify": "^6.5.0"
   },
   "devDependencies": {
-    "typescript": "^5.4.5",
+    "typescript": "^5.6.2",
     "tsx": "^4.15.7",
-  "eslint": "^8.57.0",
-    "@typescript-eslint/parser": "^7.8.0",
-    "@typescript-eslint/eslint-plugin": "^7.8.0",
-  "prettier": "^3.3.2",
-  "@types/node": "^20.12.7",
-  "vitest": "^1.6.0"
+    "eslint": "^9.9.0",
+    "@typescript-eslint/parser": "^8.0.1",
+    "@typescript-eslint/eslint-plugin": "^8.0.1",
+    "prettier": "^3.3.2",
+    "@types/node": "^20.14.10",
+    "vitest": "^1.6.0",
+    "rimraf": "^5.0.5"
   }
 }
