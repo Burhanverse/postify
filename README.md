@@ -39,16 +39,54 @@ npm install
 npm run dev
 ```
 
-### Docker (optional)
+### Docker
+
+Build & run the production image (Fastify HTTP server exposes `/docs` for status & info):
 
 ```
 docker build -t postify .
-docker run --env-file .env postify
+docker run --env-file .env -p 3000:3000 postify
+curl "http://localhost:3000/docs?format=json"
 ```
 
-### Render / VPS
+### docker-compose (local + MongoDB)
 
-Provide env vars BOT_TOKEN, MONGODB_URI. Run build then start.
+```
+cp .env.example .env   # edit BOT_TOKEN
+docker compose up --build
+```
+
+Services:
+* App: http://localhost:3000 (`/docs`)
+* MongoDB: localhost:27017
+
+### Docs Endpoint (with Health)
+
+The minimal HTTP layer (Fastify) is required for container platforms. One combined endpoint:
+
+* `GET /docs` / `/` – HTML overview + health/status
+* `GET /docs?format=json` – machine-readable health/status JSON (db state, agenda, counts, uptime)
+
+### Render Deployment
+
+1. Create new Web Service from this repo.
+2. Environment: Docker.
+3. Expose port: 3000 (Render auto-detects via `PORT` env var, already honored).
+4. Health Check Path: `/docs?format=json` (optional but recommended).
+5. Env Vars (add in dashboard):
+  * `BOT_TOKEN`
+  * `MONGODB_URI` (e.g. external MongoDB Atlas or Render addon)
+  * `DB_NAME` (optional, default `postify`)
+  * `LOG_LEVEL` (optional)
+6. No custom start command needed (`CMD ["node", "dist/index.js"]`).
+
+Render automatically sets `PORT`; the server listens on `0.0.0.0:$PORT`.
+
+### GitHub Container Registry (optional)
+
+A workflow (see `.github/workflows/docker-image.yml`) can build & push an image on pushes to `main` / tags. To enable pushes:
+* Add a repository secret `CR_PAT` with a Personal Access Token (packages:write, repo scopes) or use `GITHUB_TOKEN` (already configured in workflow for GHCR).
+* Pull image: `docker pull ghcr.io/<owner>/<repo>:latest`.
 
 ### Tests
 
@@ -89,6 +127,7 @@ src/
   telegram/        # bot instance
   models/          # mongoose models
   services/        # db, scheduling, publishing
+  server.ts        # fastify health/docs endpoints
   schedulers/      # (future) recurring logic registration
   analytics/       # analytics calculation & export
   middleware/      # auth, sessions, role checks

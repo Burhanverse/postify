@@ -9,6 +9,11 @@ const EnvSchema = z.object({
   DB_NAME: z.string().min(1).default("postify"),
   APP_BASE_URL: z.string().url().optional(),
   LOG_LEVEL: z.string().default("info"),
+  PORT: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .transform((v) => parseInt(v, 10))
+    .default("3000"),
 });
 
 type Env = z.infer<typeof EnvSchema>;
