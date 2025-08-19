@@ -1,0 +1,38 @@
+{
+  "name": "postify-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=18"},
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write ."
+  },
+  "dependencies": {
+    "grammy": "^1.24.0",
+    "@grammyjs/menu": "^1.2.1",
+    "@grammyjs/runner": "^1.0.4",
+    "@grammyjs/session": "^1.10.1",
+    "mongodb": "^6.8.0",
+    "mongoose": "^8.5.3",
+    "zod": "^3.23.8",
+    "dotenv": "^16.4.5",
+    "pino": "^9.2.0",
+    "pino-pretty": "^11.2.2",
+    "agenda": "^5.0.0",
+    "luxon": "^3.5.0",
+    "csv-stringify": "^6.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "tsx": "^4.15.7",
+    "eslint": "^9.5.0",
+    "@typescript-eslint/parser": "^7.8.0",
+    "@typescript-eslint/eslint-plugin": "^7.8.0",
+  "prettier": "^3.3.2",
+  "@types/node": "^20.12.7"
+  }
+}
