@@ -28,6 +28,7 @@ export interface SessionData {
   draftPreviewMessageId?: number; // message id of interactive draft preview
   lastDraftTextMessageId?: number; // (legacy single id - kept for backward compatibility)
   draftSourceMessages?: { id: number; html: string }[]; // list of user message ids & formatted html composing draft
+  initialDraftMessageId?: number; // id of first user text message starting the draft
   draftEditMode?:
     | "text"
     | "button"
