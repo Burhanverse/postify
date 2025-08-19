@@ -45,6 +45,12 @@ docker run --env-file .env postify
 ### Render / VPS
 Provide env vars BOT_TOKEN, MONGODB_URI. Run build then start.
 
+### Tests
+Run unit tests:
+```
+npm test
+```
+
 ## Structure
 ```
 src/
