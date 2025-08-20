@@ -40,6 +40,7 @@ export interface SessionData {
   controlMessageId?: number; // reusable main UI message id
   scheduleMessageId?: number; // scheduling submenu message id
   awaitingBotToken?: boolean; // waiting for user to send personal bot token
+  awaitingUnlinkBotConfirm?: boolean; // confirmation flag for unlinkbot
 }
 
 function initial(): SessionData {

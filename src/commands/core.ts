@@ -50,7 +50,37 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     );
   });
 
+  // Provide status + restart attempt
+  bot.command("botstatus", async (ctx) => {
+    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+    if (!ub) return ctx.reply("No personal bot registered.");
+    return ctx.reply(`Status: ${ub.status}${ub.lastError ? "\nLast error: " + ub.lastError : ""}`);
+  });
+
+  // Unlink flow with confirmation
+  bot.command("unlinkbot", async (ctx) => {
+    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+    if (!ub) return ctx.reply("No personal bot to unlink.");
+    ctx.session.awaitingUnlinkBotConfirm = true;
+    await ctx.reply("Type CONFIRM UNLINK to remove your personal bot (cannot be undone).", { });
+  });
+
   bot.on("message", async (ctx, next) => {
+    // Unlink confirmation
+    if (ctx.session.awaitingUnlinkBotConfirm && ctx.message?.text) {
+      const val = ctx.message.text.trim();
+      ctx.session.awaitingUnlinkBotConfirm = false;
+      if (val !== "CONFIRM UNLINK") {
+        await ctx.reply("Canceled.");
+        return;
+      }
+      const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+      if (!ub) return ctx.reply("Already removed.");
+      await UserBotModel.deleteOne({ botId: ub.botId });
+      await ctx.reply("✅ Personal bot unlinked. You can /addbot again anytime.");
+      return;
+    }
+
     if (ctx.session.awaitingBotToken && ctx.message?.text) {
       const token = ctx.message.text.trim();
       ctx.session.awaitingBotToken = false;
@@ -144,6 +174,8 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     .setMyCommands([
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
+  { command: "botstatus", description: "Personal bot health" },
+  { command: "unlinkbot", description: "Remove personal bot" },
       { command: "channels", description: "List connected channels" },
       { command: "checkchannels", description: "Verify channel permissions" },
       { command: "migratechannels", description: "List legacy channels" },

@@ -1,6 +1,7 @@
 import { connectDb } from "./services/db";
 import { initAgenda } from "./services/agenda";
 import { launchBot } from "./telegram/bot";
+import { loadAllUserBotsOnStartup, startUserBotSupervisor } from "./services/userBotRegistry";
 import { logger } from "./utils/logger";
 import { env } from "./config/env";
 import { startHttpServer } from "./server";
@@ -15,7 +16,9 @@ async function main() {
       "BOT_TOKEN appears to be a placeholder. Skipping bot start. Set a real token to run the bot.",
     );
   } else {
-    launchBot();
+  launchBot();
+  await loadAllUserBotsOnStartup();
+  startUserBotSupervisor();
   }
 }
 
