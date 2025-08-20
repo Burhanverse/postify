@@ -11,7 +11,7 @@ import { userMiddleware } from "../middleware/user";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
 import { registerPostCommands } from "../commands/posts";
 import { registerChannelsCommands } from "../commands/channels";
-import { decrypt } from "../utils/crypto";
+import { decrypt } from "../utils/crypto.js";
 
 interface ActiveBotMeta {
   bot: Bot<BotContext>;
@@ -65,21 +65,24 @@ export async function getOrCreateUserBot(botId: number) {
     logger.error({ err, botId }, "Unhandled personal bot error");
   });
 
-  try {
-    await bot.start({ drop_pending_updates: false });
-    activeBots.set(botId, {
-      bot,
-      ownerTgId: record.ownerTgId,
-      username: record.username,
-      failures: 0,
-      startedAt: new Date(),
+  // Register bot metadata BEFORE initiating long-polling so publishing can proceed without waiting.
+  activeBots.set(botId, {
+    bot,
+    ownerTgId: record.ownerTgId,
+  username: record.username || undefined,
+    failures: 0,
+    startedAt: new Date(),
+  });
+  // Start long polling asynchronously (do not await to avoid blocking publishPost or command handlers)
+  bot.start({ drop_pending_updates: false })
+    .then(() => {
+      logger.info({ botId, username: record.username, owner: record.ownerTgId }, "Personal bot started");
+    })
+    .catch(async (err) => {
+      logger.error({ err, botId }, "Failed to start personal bot");
+      stopUserBot(botId); // remove from active set
+      await UserBotModel.updateOne({ botId }, { $set: { status: "error", lastError: (err as Error).message } });
     });
-    logger.info({ botId, username: record.username, owner: record.ownerTgId }, "Personal bot started");
-  } catch (err) {
-    logger.error({ err, botId }, "Failed to start personal bot");
-    await UserBotModel.updateOne({ botId }, { $set: { status: "error", lastError: (err as Error).message } });
-    throw err;
-  }
   return bot;
 }
 

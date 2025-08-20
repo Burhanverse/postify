@@ -669,6 +669,33 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         return;
       }
 
+      // Ensure channel is bound to a personal bot (post-migration requirement)
+      if (!channel.botId) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "❌ **Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat.",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Quick active personal bot record check before creating DB post
+      const { UserBotModel } = await import("../models/UserBot");
+      const userBotRecord = await UserBotModel.findOne({ botId: channel.botId, status: "active" });
+      if (!userBotRecord) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "❌ **Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Provide immediate feedback (avoid silent wait on network)
+      try {
+        await ctx.answerCallbackQuery({ text: "Sending…" });
+      } catch {}
+
       try {
         // Create the post in the database
         const post = await PostModel.create({
@@ -703,30 +730,32 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         const successMessage = `✅ **Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
 
         try {
-          // For media messages (photo/video), we can't edit the text, so send a new message
           if (
             draft.mediaFileId &&
             (draft.postType === "photo" || draft.postType === "video")
           ) {
+            // Media – cannot edit original draft control message reliably; send new success message
             await ctx.reply(successMessage, { parse_mode: "Markdown" });
           } else {
-            // For text-only messages, we can edit the message
-            await ctx.editMessageText(successMessage, {
-              parse_mode: "Markdown",
-            });
+            // Text – edit the control/preview message if possible
+            try {
+              await ctx.editMessageText(successMessage, {
+                parse_mode: "Markdown",
+              });
+            } catch {
+              await ctx.reply(successMessage, { parse_mode: "Markdown" });
+            }
           }
-        } catch (editError) {
-          // Fallback: send a new message if editing fails
+        } catch {
           await ctx.reply(successMessage, { parse_mode: "Markdown" });
         }
       } catch (error) {
         console.error("Send now error:", error);
-        await ctx.answerCallbackQuery();
+        try { await ctx.answerCallbackQuery(); } catch {}
 
         // Try to provide more specific error information
         const sendErrorMessage = async (message: string) => {
           try {
-            // For media messages, always send a new message
             if (
               draft.mediaFileId &&
               (draft.postType === "photo" || draft.postType === "video")
@@ -736,7 +765,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
               await ctx.editMessageText(message, { parse_mode: "Markdown" });
             }
           } catch {
-            // Fallback: send new message if editing fails
             await ctx.reply(message, { parse_mode: "Markdown" });
           }
         };
@@ -746,9 +774,19 @@ export function registerPostCommands(bot: Bot<BotContext>) {
             await sendErrorMessage(
               "❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel",
             );
-          } else if (error.message.includes("not enough rights")) {
+          } else if (
+            error.message.includes("not enough rights") ||
+            error.message.includes("lacks posting rights")
+          ) {
             await sendErrorMessage(
-              "❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.",
+              "❌ **Error: Insufficient permissions**\n\nPersonal bot lacks permission to post. Make sure your personal bot is still an admin with posting rights.",
+            );
+          } else if (
+            error.message.includes("personal bot") ||
+            error.message.includes("Personal bot inactive")
+          ) {
+            await sendErrorMessage(
+              "❌ **Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
             );
           } else {
             await sendErrorMessage(`❌ **Error occurred**\n\n${error.message}`);

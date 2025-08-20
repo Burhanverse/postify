@@ -36,14 +36,13 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   }
 
   try {
+    logger.debug({ chatId, botId: userBotRecord.botId }, "Publisher: fetching personal bot & checking permissions");
     const personalBot = await getOrCreateUserBot(userBotRecord.botId);
-    const botMember = await personalBot.api.getChatMember(
-      chatId,
-      userBotRecord.botId,
-    );
+    const botMember = await personalBot.api.getChatMember(chatId, userBotRecord.botId);
     const canPost =
       botMember.status === "administrator" || botMember.status === "creator";
     if (!canPost) throw new Error("Personal bot lacks posting rights");
+    logger.debug({ chatId, botId: userBotRecord.botId }, "Publisher: permission check passed");
   } catch (err) {
     logger.warn(
       { err, chatId, botId: userBotRecord.botId },
@@ -78,29 +77,18 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
 
   let sent;
   try {
+    logger.debug({ postId: post._id.toString(), chatId }, "Publisher: sending message");
     const personalBot = await getOrCreateUserBot(channel.botId);
     if (post.type === "photo" && post.mediaFileId) {
-      sent = await personalBot.api.sendPhoto(chatId, post.mediaFileId, {
-        caption: post.text || undefined,
-        ...sendOptions,
-      });
+      sent = await personalBot.api.sendPhoto(chatId, post.mediaFileId, { caption: post.text || undefined, ...sendOptions });
     } else if (post.type === "video" && post.mediaFileId) {
-      sent = await personalBot.api.sendVideo(chatId, post.mediaFileId, {
-        caption: post.text || undefined,
-        ...sendOptions,
-      });
+      sent = await personalBot.api.sendVideo(chatId, post.mediaFileId, { caption: post.text || undefined, ...sendOptions });
     } else {
-      sent = await personalBot.api.sendMessage(
-        chatId,
-        post.text || "",
-        sendOptions,
-      );
+      sent = await personalBot.api.sendMessage(chatId, post.text || "", sendOptions);
     }
+    logger.debug({ postId: post._id.toString(), chatId, messageId: sent?.message_id }, "Publisher: message sent, updating DB");
   } catch (err) {
-    logger.error(
-      { err, postId: post._id.toString(), chatId },
-      "Failed to send message to Telegram",
-    );
+    logger.error({ err, postId: post._id.toString(), chatId }, "Failed to send message to Telegram");
     throw err;
   }
 

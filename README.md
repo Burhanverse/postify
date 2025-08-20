@@ -17,7 +17,7 @@ A Telegram channel management & scheduling bot (Controller Bot alternative) buil
 | Inline buttons (no counters)          | Implemented             |
 | Role-based multi-admin                | Basic (list/add/remove) |
 | Group Topic Support                   | Planned                 |
-| Link custom bot (like controllerbot)  | Implemented (per-user)  |
+| Link bot (like controllerbot)         | Experimental (per-user) |
 
 ## Personal Bot Architecture (Security Hardening)
 
