@@ -3,6 +3,7 @@ import { InlineKeyboard } from "grammy";
 import { postScheduler } from "../services/scheduler";
 import { ChannelModel } from "../models/Channel";
 import { PostModel } from "../models/Post";
+import { UserModel } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
 
@@ -34,8 +35,9 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
     return;
   }
 
-  // Get user's timezone (defaulting to UTC for now)
-  const timezone = 'UTC'; // TODO: Allow users to set their timezone
+  // Get user's timezone (persisted preference or fallback)
+  const user = await UserModel.findOne({ tgId: userId });
+  const timezone = user?.preferences?.timezone || 'UTC';
 
   // If no time input provided, show scheduling options
   if (!timeInput?.trim()) {
@@ -163,39 +165,60 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
  * Show interactive scheduling options with enhanced quick-select buttons
  */
 async function showSchedulingOptions(ctx: BotContext): Promise<void> {
+  const userTz = (await UserModel.findOne({ tgId: ctx.from?.id }))?.preferences?.timezone || 'UTC';
   const keyboard = new InlineKeyboard()
-    // First row - Quick times
-    .text("⏰ 15 min", "schedule_quick:in 15m")
-    .text("⏰ 30 min", "schedule_quick:in 30m")
-    .text("⏰ 1 hour", "schedule_quick:in 1h")
+    // Preset row 1
+    .text("15m", "schedule_quick:in 15m")
+    .text("30m", "schedule_quick:in 30m")
+    .text("1h", "schedule_quick:in 1h")
     .row()
-    // Second row - Medium times
-    .text("⏰ 2 hours", "schedule_quick:in 2h")
-    .text("⏰ 4 hours", "schedule_quick:in 4h")
-    .text("⏰ 6 hours", "schedule_quick:in 6h")
+    // Preset row 2
+    .text("2h", "schedule_quick:in 2h")
+    .text("4h", "schedule_quick:in 4h")
+    .text("6h", "schedule_quick:in 6h")
     .row()
-    // Third row - Daily options
-    .text("🌅 Tomorrow 8 AM", "schedule_quick:tomorrow 08:00")
-    .text("🌆 Tomorrow 6 PM", "schedule_quick:tomorrow 18:00")
+    // Day based
+    .text("Tomorrow 09:00", "schedule_quick:tomorrow 09:00")
+    .text("Tomorrow 18:00", "schedule_quick:tomorrow 18:00")
     .row()
-    // Fourth row - This week
-    .text("📅 Next Monday 9 AM", "schedule_quick:next monday 09:00")
-    .text("📅 This Weekend", "schedule_quick:next saturday 10:00")
+    .text("Next Mon 09:00", "schedule_quick:next monday 09:00")
+    .text("Weekend 10:00", "schedule_quick:next saturday 10:00")
     .row()
-    // Fifth row - Actions
-    .text("🕐 Custom Time", "schedule_custom")
+    // submenu actions
+    .text("🕐 Custom", "schedule_custom")
+    .text("🌐 TZ: "+userTz, "schedule_tz_menu")
+    .row()
     .text("❌ Cancel", "schedule_cancel");
 
   await ctx.reply(
-    "⏰ **When would you like to schedule this post?**\n\n" +
-    "Choose a quick option below or set a custom time:\n\n" +
-    "**Quick Options:**\n" +
-    "• **15m - 6h:** Schedule for today\n" +
-    "• **Tomorrow:** Schedule for next day\n" +
-    "• **Next Week:** Schedule for upcoming days\n" +
-    "• **Custom:** Enter your own time format",
-    { reply_markup: keyboard, parse_mode: "Markdown" }
+    `⏰ **Schedule Post**\n\n` +
+    `Current Timezone: **${userTz}**\n` +
+    `Select a preset below or choose Custom / Timezone.`,
+    { reply_markup: keyboard, parse_mode: 'Markdown' }
   );
+}
+
+// Timezone selection submenu (paged minimal list of common timezones)
+function timezoneKeyboard(page = 0): InlineKeyboard {
+  const commonTzs = [
+    'UTC','Europe/London','Europe/Berlin','Europe/Moscow','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Sao_Paulo'
+  ];
+  const perPage = 6;
+  const start = page * perPage;
+  const slice = commonTzs.slice(start, start + perPage);
+  const kb = new InlineKeyboard();
+  slice.forEach(tz => kb.text(tz.replace(/.*\//,''), `schedule_tz_set:${tz}`).row());
+  if (commonTzs.length > perPage) {
+    const maxPage = Math.floor((commonTzs.length - 1)/perPage);
+    kb.text(page>0? '⬅ Prev':'·', `schedule_tz_page:${Math.max(page-1,0)}`)
+      .text('✖ Cancel','schedule_cancel')
+      .text(page<maxPage? 'Next ➡':'·', `schedule_tz_page:${Math.min(page+1,maxPage)}`)
+      .row();
+  } else {
+    kb.text('❌ Cancel','schedule_cancel').row();
+  }
+  kb.text('⬅ Back','schedule_options');
+  return kb;
 }
 
 /**
@@ -212,10 +235,12 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
   }
 
   switch (action) {
-    case 'schedule_quick':
+    case 'schedule_quick': {
       await ctx.answerCallbackQuery();
+      // Persist last used preset
+      await UserModel.findOneAndUpdate({ tgId: userId }, { $set: { 'preferences.lastSchedulePreset': value } });
       await handleScheduleCommand(ctx, value);
-      break;
+      break; }
 
     case 'schedule_confirm':
       await ctx.answerCallbackQuery();
@@ -255,37 +280,58 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
       await showSchedulingOptions(ctx);
       break;
 
-    case 'schedule_custom':
+    case 'schedule_custom': {
       await ctx.answerCallbackQuery();
       ctx.session.waitingForScheduleInput = true;
-      
+      const user = await UserModel.findOne({ tgId: userId });
+      const tz = user?.preferences?.timezone || 'UTC';
       const customKeyboard = new InlineKeyboard()
-        .text("⏰ Back to Quick Options", "schedule_options")
-        .text("❌ Cancel", "schedule_cancel");
-      
+        .text("⬅ Presets", "schedule_options")
+        .text("❌ Cancel", "schedule_cancel")
+        .row()
+        .text("🌐 Timezone", "schedule_tz_menu");
       await ctx.editMessageText(
-        "🕐 **Custom Scheduling**\n\n" +
-        "Send your preferred time in one of these formats:\n\n" +
-        "**⚡ Relative Time:**\n" +
-        "• `in 15m` - In 15 minutes\n" +
-        "• `in 2h` - In 2 hours\n" +
-        "• `in 3d` - In 3 days\n\n" +
-        "**📅 Absolute Time:**\n" +
-        "• `14:30` - Today at 2:30 PM (or tomorrow if past)\n" +
-        "• `tomorrow 09:00` - Tomorrow at 9:00 AM\n" +
-        "• `2025-12-25 14:30` - Specific date and time\n" +
-        "• `12/25/2025 14:30` - US date format\n\n" +
-        "**📝 Natural Language:**\n" +
-        "• `next monday 10:00` - Next Monday at 10 AM\n" +
-        "• `friday 18:00` - This/next Friday at 6 PM\n\n" +
-        "⏰ All times are in **UTC** timezone\n" +
-        "⚠️ Minimum: 1 minute, Maximum: 6 months",
-        { 
-          reply_markup: customKeyboard,
-          parse_mode: "Markdown" 
-        }
+        `🕐 **Custom Time**\n\n`+
+        `Current Timezone: **${tz}**\n\n`+
+        `Send a time in one of these formats:\n`+
+        `• in 15m / in 2h / in 3d\n`+
+        `• 14:30 (today or tomorrow)\n`+
+        `• tomorrow 09:00\n`+
+        `• 2025-12-25 14:30\n`+
+        `• next monday 10:00\n\n`+
+        `Minimum 1 minute, Maximum 6 months.`,
+        { reply_markup: customKeyboard, parse_mode: 'Markdown' }
       );
-      break;
+      break; }
+
+    case 'schedule_tz_menu': {
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText('🌐 **Select Timezone**\n\nChoose one of the common timezones below. More will be added later.', { reply_markup: timezoneKeyboard(0), parse_mode: 'Markdown' });
+      break; }
+
+    case 'schedule_tz_page': {
+      await ctx.answerCallbackQuery();
+      const pageNum = parseInt(value || '0') || 0;
+      try { await ctx.editMessageReplyMarkup({ reply_markup: timezoneKeyboard(pageNum) }); } catch {}
+      break; }
+
+    case 'schedule_tz_set': {
+      await ctx.answerCallbackQuery({ text: 'Timezone updated' });
+      if (value) {
+        await UserModel.findOneAndUpdate({ tgId: userId }, { $set: { 'preferences.timezone': value } });
+      }
+      // Return to previous menu or custom input
+      if (ctx.session.waitingForScheduleInput) {
+        const customKeyboard = new InlineKeyboard()
+          .text("⬅ Presets", "schedule_options")
+          .text("❌ Cancel", "schedule_cancel")
+          .row()
+            .text("🌐 Timezone", "schedule_tz_menu");
+        await ctx.editMessageText(`🕐 **Custom Time**\n\nUpdated Timezone: **${value}**\n\nEnter your desired time.`, { reply_markup: customKeyboard, parse_mode: 'Markdown' });
+      } else {
+        await showSchedulingOptions(ctx);
+      }
+      break; }
 
     case 'view_queue':
       await ctx.answerCallbackQuery();

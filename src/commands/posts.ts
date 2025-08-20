@@ -290,6 +290,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   bot.on("message:text", async (ctx, next) => {
     // Button building
+  // If we're in custom schedule input mode, skip draft text handling; later handler will process
+  if (ctx.session.waitingForScheduleInput) return next();
     if (
       (ctx.session as Record<string, unknown>).awaitingButton &&
       ctx.session.draft
@@ -704,6 +706,12 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     // Clear the waiting flag
     ctx.session.waitingForScheduleInput = false;
     
+    // Persist last custom schedule input
+    if (ctx.from?.id) {
+      const { UserModel } = await import('../models/User');
+      UserModel.findOneAndUpdate({ tgId: ctx.from.id }, { $set: { 'preferences.lastCustomScheduleInput': timeInput } }).catch(()=>{});
+    }
+
     // Process the scheduling input
     await handleScheduleCommand(ctx, timeInput);
     return;

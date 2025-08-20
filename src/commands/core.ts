@@ -44,7 +44,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     ctx.session.awaitingChannelRef = true;
   });
 
-  // Handle forwarded message for private channel linking
   bot.on("message", async (ctx, next) => {
     if (!ctx.session.awaitingChannelRef) return next();
 
@@ -74,13 +73,10 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       try {
         const chat = await ctx.api.getChat("@" + username);
         chatId = chat.id;
-        // title present for channel type
         const chatShape = chat as { id: number; type: string; title?: string };
         title = chatShape.title;
         type = chat.type;
-        // Try to fetch invite link if bot is admin (private channel with public username can't have invite link retrieved without admin)
         if ((chat as { type: string }).type === "channel") {
-          // noop
         }
       } catch (err) {
         await ctx.reply(
@@ -99,7 +95,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       return;
     }
 
-    // Permission check: ensure bot has posting rights
     let member;
     try {
       member = await ctx.api.getChatMember(chatId, ctx.me.id);
@@ -176,10 +171,10 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
   bot.api
     .setMyCommands([
       { command: "addchannel", description: "Connect a channel" },
+      { command: "newpost", description: "Create a draft" },
       { command: "channels", description: "List connected channels" },
       { command: "usechannel", description: "Select active channel" },
       { command: "checkchannels", description: "Validate channel permissions" },
-      { command: "newpost", description: "Create a draft" },
       { command: "addbutton", description: "Add button to draft" },
       { command: "preview", description: "Preview draft" },
       { command: "schedule", description: "Schedule last draft" },
