@@ -46,10 +46,8 @@ export async function handleChannelCallback(ctx: BotContext) {
     channel = await ChannelModel.findOne({ chatId });
   }
   if ((action === "i" || action === "u" || action === "uc") && !channel) {
-    await ctx.answerCallbackQuery({
-      text: "Channel not found",
-      show_alert: false,
-    });
+    await ctx.answerCallbackQuery();
+    await ctx.reply("❌ **Channel not found**\n\nThe selected channel no longer exists or has been removed.", { parse_mode: "Markdown" });
     return true;
   }
 
@@ -72,17 +70,21 @@ export async function handleChannelCallback(ctx: BotContext) {
       { chatId },
       { $pull: { owners: ctx.from?.id } },
     );
-    await ctx.editMessageText("Channel unlinked for you.");
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText(`✅ **Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`, { parse_mode: "Markdown" });
   } else if (action === "list") {
     const channels = await ChannelModel.find({ owners: ctx.from?.id })
       .limit(25)
       .lean();
     if (!channels.length) {
-      await ctx.editMessageText("No channels linked.");
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText("📭 **No channels linked**\n\nUse /addchannel to connect your first channel.", { parse_mode: "Markdown" });
       return true;
     }
-    await ctx.editMessageText("Your channels:", {
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageText("📋 **Your channels:**", {
       reply_markup: buildChannelsKeyboard(channels),
+      parse_mode: "Markdown"
     });
   }
   return true;

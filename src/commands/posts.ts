@@ -299,16 +299,16 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         const target = parts.slice(1).join("|");
         if (/^https?:\/\//i.test(target)) {
           ctx.session.draft.buttons?.push({ text, url: target });
-          await ctx.reply("Button added (link).");
+          await ctx.reply(`✅ **URL button added**\n\nButton: "${text}"\nURL: ${target}`, { parse_mode: "Markdown" });
         } else if (/^CALLBACK:/i.test(target)) {
           const key = target.split(":")[1];
           ctx.session.draft.buttons?.push({ text, callbackData: key });
-          await ctx.reply("Button added (callback).");
+          await ctx.reply(`✅ **Callback button added**\n\nButton: "${text}"\nCallback: ${key}`, { parse_mode: "Markdown" });
         } else {
-          await ctx.reply("Unrecognized button format.");
+          await ctx.reply("❌ **Unrecognized button format**\n\nUse URL format: `Button Text | https://example.com`\nOr callback format: `Button Text | CALLBACK:key`", { parse_mode: "Markdown" });
         }
       } else {
-        await ctx.reply("Format invalid. Use: Text | URL");
+        await ctx.reply("❌ **Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`", { parse_mode: "Markdown" });
       }
       delete (ctx.session as Record<string, unknown>).awaitingButton;
       return;
@@ -359,7 +359,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         });
         
         if (!channel) {
-          await ctx.answerCallbackQuery({ text: "Channel not found or access denied" });
+          await ctx.answerCallbackQuery();
+          await ctx.editMessageText("❌ **Error:** Channel not found or access denied.\n\nPlease use /addchannel to link a valid channel.", { parse_mode: "Markdown" });
           return;
         }
         
@@ -371,9 +372,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         delete ctx.session.draftSourceMessages;
         delete ctx.session.initialDraftMessageId;
         
-        await ctx.answerCallbackQuery({ text: `Selected: ${channel.title || channel.username || chatId}` });
+        await ctx.answerCallbackQuery();
         await ctx.editMessageText(
-          `📝 **Draft started for:** ${channel.title || channel.username || chatId}\n\n` +
+          `✅ **Channel Selected:** ${channel.title || channel.username || chatId}\n\n` +
+          "📝 **Draft started!**\n\n" +
           "Send text to add to your draft. Use HTML tags for formatting:\n" +
           "• \`<b>bold</b>\` for **bold**\n" +
           "• \`<i>italic</i>\` for *italic*\n" +
@@ -388,8 +390,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       }
       
       if (action === "cancel") {
-        await ctx.answerCallbackQuery({ text: "Cancelled" });
-        await ctx.editMessageText("❌ Post creation cancelled.");
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageText("❌ **Post creation cancelled.**\n\nUse /newpost to start a new post.", { parse_mode: "Markdown" });
         return;
       }
       
@@ -398,7 +400,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     
     if (!data?.startsWith("draft:")) return next();
     if (!ctx.session.draft) {
-      await ctx.answerCallbackQuery({ text: "No draft" });
+      await ctx.answerCallbackQuery();
+      await ctx.reply("❌ **No draft found**\n\nPlease start a new post with /newpost first.", { parse_mode: "Markdown" });
       return;
     }
     const [, action, value] = data.split(":");
@@ -431,7 +434,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "managebtns") {
       const buttons = ctx.session.draft.buttons || [];
       if (!buttons.length) {
-        await ctx.answerCallbackQuery({ text: "No buttons" });
+        await ctx.answerCallbackQuery();
+        await ctx.reply("❌ **No buttons found**\n\nAdd buttons first using the ➕ Button option or /addbutton command.", { parse_mode: "Markdown" });
         return;
       }
       const kbList = new InlineKeyboard();
@@ -445,17 +449,23 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "addbtn") {
       (ctx.session as Record<string, unknown>).awaitingButton = true;
-      await ctx.answerCallbackQuery({
-        text: "Send: Text | URL or Text | CALLBACK:key",
-        show_alert: false,
-      });
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        "➕ **Add Button**\n\n" +
+        "Send your button in this format:\n" +
+        "• `Button Text | https://example.com` for URL buttons\n" +
+        "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
+        "**Example:** `Visit Website | https://google.com`",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
     if (action === "showbtn") {
       const idx = Number(value);
       const btn = ctx.session.draft.buttons?.[idx];
       if (!btn) {
-        await ctx.answerCallbackQuery({ text: "Missing" });
+        await ctx.answerCallbackQuery();
+        await ctx.reply("❌ **Button not found**\n\nThe selected button no longer exists.", { parse_mode: "Markdown" });
         return;
       }
       const kbBtn = new InlineKeyboard()
@@ -469,18 +479,27 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "delbtn") {
       const idx = Number(value);
+      const deletedButton = ctx.session.draft.buttons?.[idx];
       if (ctx.session.draft.buttons) ctx.session.draft.buttons.splice(idx, 1);
-      await ctx.answerCallbackQuery({ text: "Removed" });
+      await ctx.answerCallbackQuery();
+      await ctx.reply(`✅ **Button removed**\n\nDeleted: "${deletedButton?.text || 'Unknown button'}"`, { parse_mode: "Markdown" });
       await renderDraftPreview(ctx);
       return;
     }
     if (action === "editbtn") {
       const idx = Number(value);
+      const btn = ctx.session.draft.buttons?.[idx];
       ctx.session.draftEditMode = "button";
       (ctx.session as Record<string, unknown>).editingButtonIndex = idx;
-      await ctx.answerCallbackQuery({
-        text: "Send new button: Text | URL or Text | CALLBACK:key",
-      });
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        `✏️ **Edit Button: "${btn?.text || 'Unknown'}"**\n\n` +
+        "Send the new button in this format:\n" +
+        "• `Button Text | https://example.com` for URL buttons\n" +
+        "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
+        "**Current:** ${btn?.url ? `URL button to ${btn.url}` : btn?.callbackData ? `Callback button (${btn.callbackData})` : 'Unknown type'}",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
   if (action === "back") {
@@ -489,33 +508,43 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "clear") {
-  ctx.session.draft = { postType: "text", buttons: [] };
+      ctx.session.draft = { postType: "text", buttons: [] };
       delete ctx.session.lastDraftTextMessageId;
-  delete ctx.session.draftSourceMessages;
-  delete ctx.session.initialDraftMessageId;
-      await ctx.answerCallbackQuery({ text: "Cleared" });
+      delete ctx.session.draftSourceMessages;
+      delete ctx.session.initialDraftMessageId;
+      await ctx.answerCallbackQuery();
+      await ctx.reply("🧹 **Draft cleared**\n\nYour draft has been reset. You can start adding content again.", { parse_mode: "Markdown" });
       await renderDraftPreview(ctx);
       return;
     }
     if (action === "cancel") {
-  delete ctx.session.draft;
+      delete ctx.session.draft;
       delete ctx.session.draftPreviewMessageId;
       delete ctx.session.lastDraftTextMessageId;
-  delete ctx.session.draftSourceMessages;
-  delete ctx.session.initialDraftMessageId;
-      await ctx.answerCallbackQuery({ text: "Cancelled" });
+      delete ctx.session.draftSourceMessages;
+      delete ctx.session.initialDraftMessageId;
+      await ctx.answerCallbackQuery();
+      await ctx.reply("❌ **Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.", { parse_mode: "Markdown" });
       return;
     }
     if (action === "schedule") {
       ctx.session.draftEditMode = "schedule_time";
-      await ctx.answerCallbackQuery({
-        text: "Send schedule time: in <minutes> OR ISO date",
-      });
+      await ctx.answerCallbackQuery();
+      await ctx.reply(
+        "⏰ **Schedule Post**\n\n" +
+        "Send when you want to schedule this post:\n" +
+        "• `in 30` - Schedule in 30 minutes\n" +
+        "• `in 120` - Schedule in 2 hours (120 minutes)\n" +
+        "• `2025-08-21T10:00:00Z` - Schedule for specific ISO date/time\n\n" +
+        "**Time Range:** 1 minute to 1 week (10,080 minutes)",
+        { parse_mode: "Markdown" }
+      );
       return;
     }
     if (action === "preview") {
       delete ctx.session.draftPreviewMessageId; // Force new preview message
-      await ctx.answerCallbackQuery({ text: "Generating fresh preview..." });
+      await ctx.answerCallbackQuery();
+      await ctx.reply("👁 **Generating fresh preview...**\n\nCreating a new preview of your draft.", { parse_mode: "Markdown" });
       await renderDraftPreview(ctx);
       return;
     }
@@ -523,13 +552,15 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       // Immediate send without scheduling
       const draft = ctx.session.draft;
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
-        await ctx.answerCallbackQuery({ text: "Draft is empty! Add text or media first." });
+        await ctx.answerCallbackQuery();
+        await ctx.reply("❌ **Draft is empty!**\n\nAdd text or media content first before sending.", { parse_mode: "Markdown" });
         return;
       }
       
       // Check if channel is selected
       if (!ctx.session.selectedChannelChatId) {
-        await ctx.answerCallbackQuery({ text: "No channel selected! Use /newpost to select a channel." });
+        await ctx.answerCallbackQuery();
+        await ctx.reply("❌ **No channel selected!**\n\nUse /newpost to select a channel first.", { parse_mode: "Markdown" });
         return;
       }
       
@@ -539,7 +570,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       });
       
       if (!channel) {
-        await ctx.answerCallbackQuery({ text: "Selected channel not found! Please use /newpost to select a valid channel." });
+        await ctx.answerCallbackQuery();
+        await ctx.reply("❌ **Channel not found!**\n\nPlease use /newpost to select a valid channel.", { parse_mode: "Markdown" });
         return;
       }
       
@@ -571,39 +603,39 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         delete ctx.session.draftSourceMessages;
         delete ctx.session.initialDraftMessageId;
         
-        await ctx.answerCallbackQuery({ text: "✅ Posted successfully!" });
-        await ctx.editMessageText("✅ Post sent successfully to channel!");
+        await ctx.answerCallbackQuery();
+        await ctx.editMessageText(`✅ **Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`, { parse_mode: "Markdown" });
       } catch (error) {
         console.error("Send now error:", error);
-        await ctx.answerCallbackQuery({ text: "❌ Failed to send post" });
+        await ctx.answerCallbackQuery();
         
         // Try to provide more specific error information
         if (error instanceof Error) {
           if (error.message.includes("chat not found")) {
             // For photo/video messages, we need to send a new message instead of editing
             if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply("❌ Error: Channel not found. Please re-add the channel with /addchannel");
+              await ctx.reply("❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel", { parse_mode: "Markdown" });
             } else {
-              await ctx.editMessageText("❌ Error: Channel not found. Please re-add the channel with /addchannel");
+              await ctx.editMessageText("❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel", { parse_mode: "Markdown" });
             }
           } else if (error.message.includes("not enough rights")) {
             if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply("❌ Error: Bot doesn't have permission to post. Grant posting rights to the bot.");
+              await ctx.reply("❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.", { parse_mode: "Markdown" });
             } else {
-              await ctx.editMessageText("❌ Error: Bot doesn't have permission to post. Grant posting rights to the bot.");
+              await ctx.editMessageText("❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.", { parse_mode: "Markdown" });
             }
           } else {
             if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply(`❌ Error: ${error.message}`);
+              await ctx.reply(`❌ **Error occurred**\n\n${error.message}`, { parse_mode: "Markdown" });
             } else {
-              await ctx.editMessageText(`❌ Error: ${error.message}`);
+              await ctx.editMessageText(`❌ **Error occurred**\n\n${error.message}`, { parse_mode: "Markdown" });
             }
           }
         } else {
           if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-            await ctx.reply("❌ Unknown error occurred while posting");
+            await ctx.reply("❌ **Unknown error occurred**\n\nPlease try again or contact support.", { parse_mode: "Markdown" });
           } else {
-            await ctx.editMessageText("❌ Unknown error occurred while posting");
+            await ctx.editMessageText("❌ **Unknown error occurred**\n\nPlease try again or contact support.", { parse_mode: "Markdown" });
           }
         }
       }
@@ -642,17 +674,17 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           idx < ctx.session.draft.buttons.length
         ) {
           ctx.session.draft.buttons[idx] = newBtn as DraftButton;
-          await ctx.reply("Button updated");
+          await ctx.reply(`✅ **Button updated**\n\nUpdated: "${newBtn.text}"`, { parse_mode: "Markdown" });
         } else {
           ctx.session.draft.buttons?.push(newBtn as DraftButton);
-          await ctx.reply("Button added");
+          await ctx.reply(`✅ **Button added**\n\nAdded: "${newBtn.text}"`, { parse_mode: "Markdown" });
         }
         ctx.session.draftEditMode = null;
         delete (ctx.session as Record<string, unknown>).editingButtonIndex;
         await renderDraftPreview(ctx);
         return;
       } else {
-        await ctx.reply("Format: Text | URL");
+        await ctx.reply("❌ **Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`", { parse_mode: "Markdown" });
         return;
       }
     } else if (mode === "schedule_time") {
