@@ -40,13 +40,7 @@ export async function schedulePost(
   await agenda.schedule(dt.toJSDate(), "publish_post", { postId });
 }
 
-export async function scheduleRecurring(
-  postId: string,
-  cron: string,
-  timezone: string,
-) {
-  await agenda.every(cron, "publish_post", { postId }, { timezone });
-}
+
 
 export async function listScheduled(limit = 20) {
   return agenda.jobs(

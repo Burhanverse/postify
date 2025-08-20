@@ -3,7 +3,7 @@ import type { Message, PhotoSize, Video } from "grammy/types";
 import { BotContext } from "../telegram/bot";
 import { PostModel, Post } from "../models/Post";
 import { ChannelModel } from "../models/Channel";
-import { schedulePost, scheduleRecurring } from "../services/agenda";
+import { schedulePost } from "../services/agenda";
 import { formatToHtml } from "../utils/format";
 import { DateTime } from "luxon";
 import { Types } from "mongoose";
@@ -417,8 +417,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         .text("📤 Now", "draft:sendnow")
         .text("⏰ Schedule", "draft:schedule")
         .row()
-        .text("🔁 Recurring", "draft:cron")
-        .row()
         .text("⬅ Back", "draft:back");
       try {
         if (ctx.session.draftPreviewMessageId) {
@@ -513,11 +511,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       await ctx.answerCallbackQuery({
         text: "Send schedule time: in <minutes> OR ISO date",
       });
-      return;
-    }
-    if (action === "cron") {
-      ctx.session.draftEditMode = "cron";
-      await ctx.answerCallbackQuery({ text: "Send cron expression (UTC)" });
       return;
     }
     if (action === "preview") {
@@ -675,19 +668,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       ).commands.get("schedule");
       if (sched) await sched.handler(ctx);
       return;
-    } else if (mode === "cron") {
-      ctx.session.draftEditMode = null;
-      ctx.match = text as unknown as string;
-      const rec = (
-        bot as unknown as {
-          commands: Map<
-            string,
-            { handler: (c: BotContext) => Promise<unknown> }
-          >;
-        }
-      ).commands.get("recurring");
-      if (rec) await rec.handler(ctx);
-      return;
     }
     return next();
   });
@@ -766,70 +746,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     await ctx.reply(`✅ Post scheduled for ${when.toISOString()} in channel: ${channel.title || channel.username || channel.chatId}`);
   }, "schedule"));
 
-  // Protected command with middleware
-  bot.command("recurring", requireSelectedChannel(), requirePostPermission(), wrapCommand(async (ctx) => {
-    const args = typeof ctx.match === 'string' ? ctx.match.trim() : '';
-    if (!args) {
-      await ctx.reply("Usage: /recurring <cron> (UTC)\nExample: /recurring '0 9 * * *' (daily at 9 AM)");
-      return;
-    }
-    
-    if (!ctx.session.draft) {
-      await ctx.reply("Create a draft first with /newpost");
-      return;
-    }
-    
-    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId) {
-      await ctx.reply("Draft is empty. Add text or media content.");
-      return;
-    }
-    
-    const channelChatId = ctx.session.selectedChannelChatId!;
-    
-    // Validate cron expression (basic validation)
-    const cronParts = args.split(' ');
-    if (cronParts.length !== 5) {
-      await ctx.reply("❌ Invalid cron format. Use 5 parts: minute hour day month weekday\nExample: '0 9 * * *' for daily at 9 AM");
-      return;
-    }
-    
-    const channel = await ChannelModel.findOne({
-      chatId: channelChatId,
-      owners: ctx.from?.id,
-    });
-    
-    if (!channel) {
-      await ctx.reply("❌ Selected channel not found. Please select a valid channel.");
-      return;
-    }
-    
-    const post = await PostModel.create({
-      channel: channel._id,
-      channelChatId: channel.chatId,
-      authorTgId: ctx.from?.id,
-      status: "scheduled",
-      type: ctx.session.draft.postType || "text",
-      text: ctx.session.draft.text,
-      mediaFileId: ctx.session.draft.mediaFileId,
-      buttons: ctx.session.draft.buttons,
-      recurrence: { cron: args, timezone: "UTC" },
-    });
-    
-    await scheduleRecurring(
-      (post._id as unknown as string).toString(),
-      args,
-      "UTC",
-    );
-    
-    logUserActivity(ctx.from?.id!, "recurring_post_created", {
-      postId: post._id.toString(),
-      channelId: channel._id.toString(),
-      cron: args
-    });
-    
-    clearDraftSession(ctx);
-    await ctx.reply(`✅ Recurring post scheduled with cron: ${args} for channel: ${channel.title || channel.username || channel.chatId}`);
-  }, "recurring"));
+
 
   bot.command("queue", async (ctx) => {
     let channel;
@@ -864,9 +781,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     
     let response = `📅 **Scheduled Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
     upcoming.forEach((p, index) => {
-      const timeInfo = p.recurrence?.cron 
-        ? `(cron: ${p.recurrence.cron})` 
-        : p.scheduledAt?.toISOString() || "No time set";
+      const timeInfo = p.scheduledAt?.toISOString() || "No time set";
       
       const preview = p.text ? 
         (p.text.length > 50 ? p.text.substring(0, 50) + "..." : p.text) : 

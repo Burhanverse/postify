@@ -21,7 +21,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       "/addbutton - add a button to draft\n" +
       "/preview - preview current draft\n" +
       "/schedule [in <min>|ISO] - schedule draft\n" +
-      "/recurring <cron> - schedule recurring draft\n" +
       "/queue - list scheduled posts\n" +
       "/listposts - list all posts\n" +
       "/admins - list admins\n" +
@@ -184,7 +183,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       { command: "addbutton", description: "Add button to draft" },
       { command: "preview", description: "Preview draft" },
       { command: "schedule", description: "Schedule last draft" },
-      { command: "recurring", description: "Schedule recurring draft" },
       { command: "queue", description: "List scheduled posts" },
       { command: "listposts", description: "List all posts" },
       { command: "admins", description: "Manage channel admins" },

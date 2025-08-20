@@ -24,7 +24,6 @@ const PostSchema = new Schema(
     mediaFileId: String,
     buttons: [InlineButtonSchema],
     scheduledAt: Date,
-    recurrence: { cron: String, timezone: String },
     publishedMessageId: Number,
     publishedAt: Date,
     meta: { type: Map, of: String },

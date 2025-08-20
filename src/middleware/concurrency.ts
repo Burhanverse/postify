@@ -202,8 +202,7 @@ function getResourceFromContext(ctx: BotContext): string {
   }
 
   // For scheduling operations, lock per user
-  if (ctx.message?.text?.startsWith('/schedule') || 
-      ctx.message?.text?.startsWith('/recurring')) {
+  if (ctx.message?.text?.startsWith('/schedule')) {
     return `schedule:${userId}`;
   }
 
