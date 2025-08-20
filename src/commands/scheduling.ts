@@ -3,7 +3,7 @@ import { InlineKeyboard } from "grammy";
 import { postScheduler } from "../services/scheduler";
 import { ChannelModel } from "../models/Channel";
 import { PostModel } from "../models/Post";
-import { UserModel } from "../models/User";
+import { UserModel, User } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
 
@@ -37,7 +37,7 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
 
   // Get user's timezone (persisted preference or fallback)
   const user = await UserModel.findOne({ tgId: userId });
-  const timezone = user?.preferences?.timezone || 'UTC';
+  const timezone = (user as (User & { preferences?: { timezone?: string } }))?.preferences?.timezone || 'UTC';
 
   // If no time input provided, show scheduling options
   if (!timeInput?.trim()) {
@@ -165,7 +165,8 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
  * Show interactive scheduling options with enhanced quick-select buttons
  */
 async function showSchedulingOptions(ctx: BotContext): Promise<void> {
-  const userTz = (await UserModel.findOne({ tgId: ctx.from?.id }))?.preferences?.timezone || 'UTC';
+  const userDoc = await UserModel.findOne({ tgId: ctx.from?.id });
+  const userTz = (userDoc as (User & { preferences?: { timezone?: string } }) | null)?.preferences?.timezone || 'UTC';
   const keyboard = new InlineKeyboard()
     // Preset row 1
     .text("15m", "schedule_quick:in 15m")
@@ -225,7 +226,9 @@ function timezoneKeyboard(page = 0): InlineKeyboard {
  * Handle schedule callback queries
  */
 export async function handleScheduleCallback(ctx: BotContext, action: string, value: string): Promise<boolean> {
-  if (!action.startsWith('schedule_')) return false;
+  // Recognized actions for this handler
+  const allowed = ['view_queue','new_post','cancel_post'];
+  if (!action.startsWith('schedule_') && !allowed.includes(action)) return false;
 
   const userId = ctx.from?.id;
   if (!userId) {
@@ -284,7 +287,7 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
       await ctx.answerCallbackQuery();
       ctx.session.waitingForScheduleInput = true;
       const user = await UserModel.findOne({ tgId: userId });
-      const tz = user?.preferences?.timezone || 'UTC';
+  const tz = (user as (User & { preferences?: { timezone?: string } }))?.preferences?.timezone || 'UTC';
       const customKeyboard = new InlineKeyboard()
         .text("⬅ Presets", "schedule_options")
         .text("❌ Cancel", "schedule_cancel")
@@ -366,6 +369,11 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
       userId,
       limit: 10
     });
+    // Also fetch recent drafts (unscheduled posts created by user in channels they own)
+    const drafts = await PostModel.find({ authorTgId: userId, status: 'draft', scheduledAt: { $exists: false } })
+      .sort({ updatedAt: -1 })
+      .limit(5)
+      .lean();
 
     if (result.posts.length === 0) {
       await ctx.editMessageText(
@@ -375,7 +383,7 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
       return;
     }
 
-    let message = `📋 **Your scheduled posts** (${result.total} total)\n\n`;
+  let message = `📋 **Your scheduled posts** (${result.total} total)\n\n`;
     
     result.posts.forEach((post, index) => {
       const scheduledTime = DateTime.fromJSDate(post.scheduledAt!).toFormat('MMM dd, HH:mm');
@@ -396,7 +404,15 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
     });
 
     if (result.hasMore) {
-      message += `_Showing first 10 posts. Use /queue for the full list._`;
+      message += `_Showing first 10 posts. Use /queue for the full list._\n\n`;
+    }
+
+    if (drafts.length) {
+      message += `📝 **Recent Drafts (not scheduled)**\n`;
+      drafts.forEach((d) => {
+        const preview = d.text ? (d.text.length > 40 ? d.text.substring(0,40)+'...' : d.text) : '(Media draft)';
+        message += `• ${preview}\n`;
+      });
     }
 
     const keyboard = new InlineKeyboard().text("❌ Close", "close_message");
