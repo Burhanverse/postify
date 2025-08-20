@@ -11,25 +11,33 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     logger.error({ postId: post._id.toString() }, "Channel not found for post");
     throw new Error("Channel not found");
   }
-  
+
   const chatId = channel.chatId;
-  logger.info({ postId: post._id.toString(), chatId }, "Publishing post to channel");
+  logger.info(
+    { postId: post._id.toString(), chatId },
+    "Publishing post to channel",
+  );
 
   // Validate bot is still in the channel and has permissions
   try {
     const me = await bot.api.getMe();
     const botMember = await bot.api.getChatMember(chatId, me.id);
-    const canPost = botMember.status === "administrator" || botMember.status === "creator";
-    
+    const canPost =
+      botMember.status === "administrator" || botMember.status === "creator";
+
     if (!canPost) {
       throw new Error("Bot doesn't have permission to post in this channel");
     }
   } catch (err) {
     if (err instanceof Error) {
       if (err.message.includes("chat not found")) {
-        throw new Error("Channel not found. The bot may have been removed from the channel.");
+        throw new Error(
+          "Channel not found. The bot may have been removed from the channel.",
+        );
       } else if (err.message.includes("not enough rights")) {
-        throw new Error("Bot doesn't have permission to access channel information");
+        throw new Error(
+          "Bot doesn't have permission to access channel information",
+        );
       }
     }
     throw err;
@@ -37,7 +45,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
 
   const keyboard = new InlineKeyboard();
   let hasButtons = false;
-  
+
   post.buttons?.forEach(
     (b: {
       text?: string | null;
@@ -48,10 +56,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
         keyboard.url(b.text, b.url);
         hasButtons = true;
       } else if (b.callbackData && b.text) {
-        keyboard.text(
-          b.text,
-          `btn:${post._id.toString()}:${b.callbackData}`,
-        );
+        keyboard.text(b.text, `btn:${post._id.toString()}:${b.callbackData}`);
         hasButtons = true;
       }
     },
@@ -78,7 +83,10 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
       sent = await bot.api.sendMessage(chatId, post.text || "", sendOptions);
     }
   } catch (err) {
-    logger.error({ err, postId: post._id.toString(), chatId }, "Failed to send message to Telegram");
+    logger.error(
+      { err, postId: post._id.toString(), chatId },
+      "Failed to send message to Telegram",
+    );
     throw err;
   }
 

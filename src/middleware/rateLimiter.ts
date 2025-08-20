@@ -27,18 +27,21 @@ class RateLimiter {
       this.limits.set(userId, {
         count: 1,
         resetTime: now + this.windowMs,
-        lastAction: action
+        lastAction: action,
       });
       return false;
     }
 
     if (entry.count >= this.maxRequests) {
-      logger.warn({
-        userId,
-        action,
-        count: entry.count,
-        lastAction: entry.lastAction
-      }, "Rate limit exceeded");
+      logger.warn(
+        {
+          userId,
+          action,
+          count: entry.count,
+          lastAction: entry.lastAction,
+        },
+        "Rate limit exceeded",
+      );
       return true;
     }
 
@@ -76,13 +79,13 @@ export async function rateLimitMiddleware(
   }
 
   const action = getActionFromContext(ctx);
-  
+
   if (rateLimiter.isRateLimited(userId, action)) {
     const remainingMs = rateLimiter.getRemainingTime(userId);
     const remainingSeconds = Math.ceil(remainingMs / 1000);
-    
+
     const message = `⏳ You're sending commands too quickly. Please wait ${remainingSeconds} seconds before trying again.`;
-    
+
     try {
       if (ctx.callbackQuery) {
         await ctx.answerCallbackQuery({ text: message, show_alert: true });
@@ -90,10 +93,13 @@ export async function rateLimitMiddleware(
         await ctx.reply(message);
       }
     } catch (error) {
-      logger.error({
-        error: error instanceof Error ? error.message : String(error),
-        userId
-      }, "Failed to send rate limit message");
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userId,
+        },
+        "Failed to send rate limit message",
+      );
     }
     return;
   }
@@ -102,20 +108,20 @@ export async function rateLimitMiddleware(
 }
 
 function getActionFromContext(ctx: BotContext): string {
-  if (ctx.message?.text?.startsWith('/')) {
-    return ctx.message.text.split(' ')[0];
+  if (ctx.message?.text?.startsWith("/")) {
+    return ctx.message.text.split(" ")[0];
   }
   if (ctx.callbackQuery?.data) {
-    return `callback:${ctx.callbackQuery.data.split(':')[0]}`;
+    return `callback:${ctx.callbackQuery.data.split(":")[0]}`;
   }
   if (ctx.message?.photo) {
-    return 'photo_upload';
+    return "photo_upload";
   }
   if (ctx.message?.video) {
-    return 'video_upload';
+    return "video_upload";
   }
   if (ctx.message?.text) {
-    return 'text_message';
+    return "text_message";
   }
-  return 'unknown_action';
+  return "unknown_action";
 }

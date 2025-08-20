@@ -7,15 +7,25 @@ import { UserModel, User } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
 // Helper to ensure only one scheduling UI message exists (edit if possible, else send new)
-async function upsertScheduleMessage(ctx: BotContext, text: string, keyboard?: InlineKeyboard) {
+async function upsertScheduleMessage(
+  ctx: BotContext,
+  text: string,
+  keyboard?: InlineKeyboard,
+) {
   const id = ctx.session.scheduleMessageId;
   if (id) {
     try {
-      await ctx.api.editMessageText(ctx.chat!.id, id, text, { reply_markup: keyboard, parse_mode: 'Markdown' });
+      await ctx.api.editMessageText(ctx.chat!.id, id, text, {
+        reply_markup: keyboard,
+        parse_mode: "Markdown",
+      });
       return id;
     } catch {}
   }
-  const sent = await ctx.reply(text, { reply_markup: keyboard, parse_mode: 'Markdown' });
+  const sent = await ctx.reply(text, {
+    reply_markup: keyboard,
+    parse_mode: "Markdown",
+  });
   ctx.session.scheduleMessageId = sent.message_id;
   return sent.message_id;
 }
@@ -23,7 +33,10 @@ async function upsertScheduleMessage(ctx: BotContext, text: string, keyboard?: I
 /**
  * Enhanced schedule command handler with improved validation and user experience
  */
-export async function handleScheduleCommand(ctx: BotContext, timeInput?: string): Promise<void> {
+export async function handleScheduleCommand(
+  ctx: BotContext,
+  timeInput?: string,
+): Promise<void> {
   const userId = ctx.from?.id;
   if (!userId) {
     await ctx.reply("❌ Authentication required.");
@@ -32,25 +45,36 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
 
   // Validate draft exists
   if (!ctx.session.draft) {
-    await ctx.reply("❌ **No draft found**\n\nCreate a draft first with /newpost", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ **No draft found**\n\nCreate a draft first with /newpost",
+      { parse_mode: "Markdown" },
+    );
     return;
   }
 
   // Validate draft has content
   if (!ctx.session.draft.text?.trim() && !ctx.session.draft.mediaFileId) {
-    await ctx.reply("❌ **Draft is empty**\n\nAdd text or media content before scheduling.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ **Draft is empty**\n\nAdd text or media content before scheduling.",
+      { parse_mode: "Markdown" },
+    );
     return;
   }
 
   // Validate channel is selected
   if (!ctx.session.selectedChannelChatId) {
-    await ctx.reply("❌ **No channel selected**\n\nUse /newpost to select a channel first.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ **No channel selected**\n\nUse /newpost to select a channel first.",
+      { parse_mode: "Markdown" },
+    );
     return;
   }
 
   // Get user's timezone (persisted preference or fallback)
   const user = await UserModel.findOne({ tgId: userId });
-  const timezone = (user as (User & { preferences?: { timezone?: string } }))?.preferences?.timezone || 'UTC';
+  const timezone =
+    (user as User & { preferences?: { timezone?: string } })?.preferences
+      ?.timezone || "UTC";
 
   // If no time input provided, show scheduling options
   if (!timeInput?.trim()) {
@@ -60,9 +84,11 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
 
   // Parse the time input
   const parseResult = postScheduler.parseScheduleInput(timeInput, timezone);
-  
+
   if (!parseResult.valid) {
-    await ctx.reply(`❌ **Invalid time format**\n\n${parseResult.error}`, { parse_mode: "Markdown" });
+    await ctx.reply(`❌ **Invalid time format**\n\n${parseResult.error}`, {
+      parse_mode: "Markdown",
+    });
     return;
   }
 
@@ -76,14 +102,17 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
     });
 
     if (!channel) {
-      await ctx.reply("❌ **Channel not found**\n\nPlease select a valid channel.", { parse_mode: "Markdown" });
+      await ctx.reply(
+        "❌ **Channel not found**\n\nPlease select a valid channel.",
+        { parse_mode: "Markdown" },
+      );
       return;
     }
 
     // Check for scheduling conflicts
     const conflictCheck = await postScheduler.checkSchedulingConflicts(
       channel._id.toString(),
-      scheduledAt
+      scheduledAt,
     );
 
     if (conflictCheck.hasConflict && conflictCheck.recommendation) {
@@ -95,8 +124,8 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
         .text("📅 Choose Different Time", "schedule_options");
 
       await ctx.reply(
-        `⚠️ **Scheduling Conflict Warning**\n\n${conflictCheck.recommendation}\n\n**Requested time:** ${scheduledAt.toFormat('MMM dd, yyyy \'at\' HH:mm')} ${timezone}\n\nWould you like to proceed anyway?`,
-        { reply_markup: keyboard, parse_mode: "Markdown" }
+        `⚠️ **Scheduling Conflict Warning**\n\n${conflictCheck.recommendation}\n\n**Requested time:** ${scheduledAt.toFormat("MMM dd, yyyy 'at' HH:mm")} ${timezone}\n\nWould you like to proceed anyway?`,
+        { reply_markup: keyboard, parse_mode: "Markdown" },
       );
       return;
     }
@@ -106,7 +135,7 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
       channel: channel._id,
       channelChatId: channel.chatId,
       authorTgId: userId,
-      status: 'draft', // Will be updated to 'scheduled' by scheduler
+      status: "draft", // Will be updated to 'scheduled' by scheduler
       type: ctx.session.draft.postType || "text",
       text: ctx.session.draft.text,
       mediaFileId: ctx.session.draft.mediaFileId,
@@ -119,11 +148,13 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
       scheduledAt: scheduledAt.toJSDate(),
       timezone,
       channelId: channel._id.toString(),
-      userId
+      userId,
     });
 
     if (!scheduleResult.success) {
-      await ctx.reply(`❌ **Scheduling failed**\n\n${scheduleResult.error}`, { parse_mode: "Markdown" });
+      await ctx.reply(`❌ **Scheduling failed**\n\n${scheduleResult.error}`, {
+        parse_mode: "Markdown",
+      });
       return;
     }
 
@@ -136,7 +167,7 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
 
     // Success message
     let successMessage = `✅ **Post scheduled successfully!**\n\n`;
-    successMessage += `📅 **When:** ${scheduledAt.toFormat('MMMM dd, yyyy \'at\' HH:mm')} ${timezone}\n`;
+    successMessage += `📅 **When:** ${scheduledAt.toFormat("MMMM dd, yyyy 'at' HH:mm")} ${timezone}\n`;
     successMessage += `📺 **Channel:** ${channel.title || channel.username || channel.chatId}\n`;
     successMessage += `🆔 **Post ID:** \`${post._id.toString()}\``;
 
@@ -150,27 +181,35 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
       .row()
       .text("❌ Cancel This Post", `cancel_post:${post._id.toString()}`);
 
-    await ctx.reply(successMessage, { 
-      reply_markup: keyboard, 
-      parse_mode: "Markdown" 
+    await ctx.reply(successMessage, {
+      reply_markup: keyboard,
+      parse_mode: "Markdown",
     });
 
-    logger.info({
-      userId,
-      postId: post._id.toString(),
-      channelId: channel._id.toString(),
-      scheduledAt: scheduledAt.toISO(),
-      timezone
-    }, "Post scheduled via enhanced handler");
-
+    logger.info(
+      {
+        userId,
+        postId: post._id.toString(),
+        channelId: channel._id.toString(),
+        scheduledAt: scheduledAt.toISO(),
+        timezone,
+      },
+      "Post scheduled via enhanced handler",
+    );
   } catch (error) {
-    logger.error({
-      error: error instanceof Error ? error.message : String(error),
-      userId,
-      timeInput
-    }, "Error in schedule command handler");
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId,
+        timeInput,
+      },
+      "Error in schedule command handler",
+    );
 
-    await ctx.reply("❌ **Scheduling error**\n\nAn unexpected error occurred. Please try again.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ **Scheduling error**\n\nAn unexpected error occurred. Please try again.",
+      { parse_mode: "Markdown" },
+    );
   }
 }
 
@@ -179,7 +218,9 @@ export async function handleScheduleCommand(ctx: BotContext, timeInput?: string)
  */
 async function showSchedulingOptions(ctx: BotContext): Promise<void> {
   const userDoc = await UserModel.findOne({ tgId: ctx.from?.id });
-  const userTz = (userDoc as (User & { preferences?: { timezone?: string } }) | null)?.preferences?.timezone || 'UTC';
+  const userTz =
+    (userDoc as (User & { preferences?: { timezone?: string } }) | null)
+      ?.preferences?.timezone || "UTC";
   const keyboard = new InlineKeyboard()
     // Preset row 1
     .text("15m", "schedule_quick:in 15m")
@@ -200,7 +241,7 @@ async function showSchedulingOptions(ctx: BotContext): Promise<void> {
     .row()
     // submenu actions
     .text("🕐 Custom", "schedule_custom")
-    .text("🌐 TZ: "+userTz, "schedule_tz_menu")
+    .text("🌐 TZ: " + userTz, "schedule_tz_menu")
     .row()
     .text("❌ Cancel", "schedule_cancel");
 
@@ -211,33 +252,59 @@ async function showSchedulingOptions(ctx: BotContext): Promise<void> {
 // Timezone selection submenu (paged minimal list of common timezones)
 function timezoneKeyboard(page = 0): InlineKeyboard {
   const commonTzs = [
-    'UTC','Europe/London','Europe/Berlin','Europe/Moscow','Asia/Dubai','Asia/Kolkata','Asia/Singapore','Asia/Tokyo','Australia/Sydney','America/New_York','America/Chicago','America/Denver','America/Los_Angeles','America/Sao_Paulo'
+    "UTC",
+    "Europe/London",
+    "Europe/Berlin",
+    "Europe/Moscow",
+    "Asia/Dubai",
+    "Asia/Kolkata",
+    "Asia/Singapore",
+    "Asia/Tokyo",
+    "Australia/Sydney",
+    "America/New_York",
+    "America/Chicago",
+    "America/Denver",
+    "America/Los_Angeles",
+    "America/Sao_Paulo",
   ];
   const perPage = 6;
   const start = page * perPage;
   const slice = commonTzs.slice(start, start + perPage);
   const kb = new InlineKeyboard();
-  slice.forEach(tz => kb.text(tz.replace(/.*\//,''), `schedule_tz_set:${tz}`).row());
+  slice.forEach((tz) =>
+    kb.text(tz.replace(/.*\//, ""), `schedule_tz_set:${tz}`).row(),
+  );
   if (commonTzs.length > perPage) {
-    const maxPage = Math.floor((commonTzs.length - 1)/perPage);
-    kb.text(page>0? '⬅ Prev':'·', `schedule_tz_page:${Math.max(page-1,0)}`)
-      .text('✖ Cancel','schedule_cancel')
-      .text(page<maxPage? 'Next ➡':'·', `schedule_tz_page:${Math.min(page+1,maxPage)}`)
+    const maxPage = Math.floor((commonTzs.length - 1) / perPage);
+    kb.text(
+      page > 0 ? "⬅ Prev" : "·",
+      `schedule_tz_page:${Math.max(page - 1, 0)}`,
+    )
+      .text("✖ Cancel", "schedule_cancel")
+      .text(
+        page < maxPage ? "Next ➡" : "·",
+        `schedule_tz_page:${Math.min(page + 1, maxPage)}`,
+      )
       .row();
   } else {
-    kb.text('❌ Cancel','schedule_cancel').row();
+    kb.text("❌ Cancel", "schedule_cancel").row();
   }
-  kb.text('⬅ Back','schedule_options');
+  kb.text("⬅ Back", "schedule_options");
   return kb;
 }
 
 /**
  * Handle schedule callback queries
  */
-export async function handleScheduleCallback(ctx: BotContext, action: string, value: string): Promise<boolean> {
+export async function handleScheduleCallback(
+  ctx: BotContext,
+  action: string,
+  value: string,
+): Promise<boolean> {
   // Recognized actions for this handler
-  const allowed = ['view_queue','new_post','cancel_post'];
-  if (!action.startsWith('schedule_') && !allowed.includes(action)) return false;
+  const allowed = ["view_queue", "new_post", "cancel_post"];
+  if (!action.startsWith("schedule_") && !allowed.includes(action))
+    return false;
 
   const userId = ctx.from?.id;
   if (!userId) {
@@ -247,25 +314,29 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
   }
 
   switch (action) {
-    case 'schedule_quick': {
+    case "schedule_quick": {
       await ctx.answerCallbackQuery();
       // Persist last used preset
-      await UserModel.findOneAndUpdate({ tgId: userId }, { $set: { 'preferences.lastSchedulePreset': value } });
+      await UserModel.findOneAndUpdate(
+        { tgId: userId },
+        { $set: { "preferences.lastSchedulePreset": value } },
+      );
       await handleScheduleCommand(ctx, value);
-      break; }
+      break;
+    }
 
-    case 'schedule_confirm':
+    case "schedule_confirm":
       await ctx.answerCallbackQuery();
       await handleScheduleCommand(ctx, value);
       break;
 
-    case 'schedule_cancel':
+    case "schedule_cancel":
       await ctx.answerCallbackQuery();
       // Clear any pending scheduling input mode
       if (ctx.session.waitingForScheduleInput) {
         ctx.session.waitingForScheduleInput = false;
       }
-      
+
       // Return to draft controls
       const cancelKeyboard = new InlineKeyboard()
         .text("📮 Send Now", "draft:sendnow")
@@ -276,52 +347,65 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
         .row()
         .text("🔗 Add Button", "draft:add_button")
         .text("❌ Cancel Draft", "draft:cancel");
-      
+
       await ctx.editMessageText(
         "❌ **Scheduling cancelled**\n\n" +
-        "Your draft is still available. Use the buttons below to continue editing:",
-        { 
+          "Your draft is still available. Use the buttons below to continue editing:",
+        {
           reply_markup: cancelKeyboard,
-          parse_mode: "Markdown" 
-        }
+          parse_mode: "Markdown",
+        },
       );
       break;
 
-    case 'schedule_options':
+    case "schedule_options":
       await ctx.answerCallbackQuery();
       await showSchedulingOptions(ctx);
       break;
 
-    case 'schedule_custom': {
+    case "schedule_custom": {
       await ctx.answerCallbackQuery();
       ctx.session.waitingForScheduleInput = true;
       const user = await UserModel.findOne({ tgId: userId });
-  const tz = (user as (User & { preferences?: { timezone?: string } }))?.preferences?.timezone || 'UTC';
+      const tz =
+        (user as User & { preferences?: { timezone?: string } })?.preferences
+          ?.timezone || "UTC";
       const customKeyboard = new InlineKeyboard()
         .text("⬅ Presets", "schedule_options")
         .text("❌ Cancel", "schedule_cancel")
         .row()
         .text("🌐 Timezone", "schedule_tz_menu");
-  const customText = `🕐 **Custom Time**\n\nCurrent Timezone: **${tz}**\n\nSend a time (examples):\n• in 15m / in 2h / in 3d\n• 14:30 (today or tomorrow)\n• tomorrow 09:00\n• 2025-12-25 14:30\n• next monday 10:00\n\nMinimum 1 minute, Maximum 6 months.`;
-  await upsertScheduleMessage(ctx, customText, customKeyboard);
-      break; }
+      const customText = `🕐 **Custom Time**\n\nCurrent Timezone: **${tz}**\n\nSend a time (examples):\n• in 15m / in 2h / in 3d\n• 14:30 (today or tomorrow)\n• tomorrow 09:00\n• 2025-12-25 14:30\n• next monday 10:00\n\nMinimum 1 minute, Maximum 6 months.`;
+      await upsertScheduleMessage(ctx, customText, customKeyboard);
+      break;
+    }
 
-    case 'schedule_tz_menu': {
+    case "schedule_tz_menu": {
       await ctx.answerCallbackQuery();
-  const tzText = '🌐 **Select Timezone**\n\nChoose one of the common timezones below. More will be added later.';
-  await upsertScheduleMessage(ctx, tzText, timezoneKeyboard(0));
-      break; }
+      const tzText =
+        "🌐 **Select Timezone**\n\nChoose one of the common timezones below. More will be added later.";
+      await upsertScheduleMessage(ctx, tzText, timezoneKeyboard(0));
+      break;
+    }
 
-    case 'schedule_tz_page': {
+    case "schedule_tz_page": {
       await ctx.answerCallbackQuery();
-      const pageNum = parseInt(value || '0') || 0;
-      try { await ctx.editMessageReplyMarkup({ reply_markup: timezoneKeyboard(pageNum) }); } catch {}
-      break; }
+      const pageNum = parseInt(value || "0") || 0;
+      try {
+        await ctx.editMessageReplyMarkup({
+          reply_markup: timezoneKeyboard(pageNum),
+        });
+      } catch {}
+      break;
+    }
 
-    case 'schedule_tz_set': {
-      await ctx.answerCallbackQuery({ text: 'Timezone updated' });
+    case "schedule_tz_set": {
+      await ctx.answerCallbackQuery({ text: "Timezone updated" });
       if (value) {
-        await UserModel.findOneAndUpdate({ tgId: userId }, { $set: { 'preferences.timezone': value } });
+        await UserModel.findOneAndUpdate(
+          { tgId: userId },
+          { $set: { "preferences.timezone": value } },
+        );
       }
       // Return to previous menu or custom input
       if (ctx.session.waitingForScheduleInput) {
@@ -329,27 +413,30 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
           .text("⬅ Presets", "schedule_options")
           .text("❌ Cancel", "schedule_cancel")
           .row()
-            .text("🌐 Timezone", "schedule_tz_menu");
+          .text("🌐 Timezone", "schedule_tz_menu");
         const backText = `🕐 **Custom Time**\n\nUpdated Timezone: **${value}**\n\nEnter your desired time.`;
-  await upsertScheduleMessage(ctx, backText, customKeyboard);
+        await upsertScheduleMessage(ctx, backText, customKeyboard);
       } else {
         await showSchedulingOptions(ctx);
       }
-      break; }
+      break;
+    }
 
-    case 'view_queue':
+    case "view_queue":
       await ctx.answerCallbackQuery();
       await showScheduledPosts(ctx);
       break;
 
-    case 'new_post':
+    case "new_post":
       await ctx.answerCallbackQuery();
       // Trigger new post command - this would need to be handled by the main command router
-      await ctx.editMessageText("📝 Use /newpost to create a new post", { parse_mode: "Markdown" });
+      await ctx.editMessageText("📝 Use /newpost to create a new post", {
+        parse_mode: "Markdown",
+      });
       break;
 
     default:
-      if (action === 'cancel_post') {
+      if (action === "cancel_post") {
         await handleCancelPost(ctx, value);
       }
       break;
@@ -368,10 +455,14 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
   try {
     const result = await postScheduler.getScheduledPosts({
       userId,
-      limit: 10
+      limit: 10,
     });
     // Also fetch recent drafts (unscheduled posts created by user in channels they own)
-    const drafts = await PostModel.find({ authorTgId: userId, status: 'draft', scheduledAt: { $exists: false } })
+    const drafts = await PostModel.find({
+      authorTgId: userId,
+      status: "draft",
+      scheduledAt: { $exists: false },
+    })
       .sort({ updatedAt: -1 })
       .limit(5)
       .lean();
@@ -379,27 +470,34 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
     if (result.posts.length === 0) {
       await ctx.editMessageText(
         "📭 **No scheduled posts**\n\nYou don't have any posts scheduled at the moment.\n\nUse /newpost to create and schedule a new post.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
       return;
     }
 
-  let message = `📋 **Your scheduled posts** (${result.total} total)\n\n`;
-    
+    let message = `📋 **Your scheduled posts** (${result.total} total)\n\n`;
+
     result.posts.forEach((post, index) => {
-      const scheduledTime = DateTime.fromJSDate(post.scheduledAt!).toFormat('MMM dd, HH:mm');
-      const preview = post.text ? 
-        (post.text.length > 40 ? post.text.substring(0, 40) + "..." : post.text) : 
-        "(Media post)";
-      
+      const scheduledTime = DateTime.fromJSDate(post.scheduledAt!).toFormat(
+        "MMM dd, HH:mm",
+      );
+      const preview = post.text
+        ? post.text.length > 40
+          ? post.text.substring(0, 40) + "..."
+          : post.text
+        : "(Media post)";
+
       message += `${index + 1}. **${preview}**\n`;
       message += `   📅 ${scheduledTime} UTC\n`;
-      const channelInfo = post.channel && typeof post.channel === 'object' && 'title' in post.channel
-        ? (post.channel as { title?: string; username?: string }).title || 
-          (post.channel as { title?: string; username?: string }).username || 
-          'Unknown channel'
-        : 'Unknown channel';
-      
+      const channelInfo =
+        post.channel &&
+        typeof post.channel === "object" &&
+        "title" in post.channel
+          ? (post.channel as { title?: string; username?: string }).title ||
+            (post.channel as { title?: string; username?: string }).username ||
+            "Unknown channel"
+          : "Unknown channel";
+
       message += `   📺 ${channelInfo}\n`;
       message += `   🆔 \`${post._id.toString()}\`\n\n`;
     });
@@ -411,28 +509,37 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
     if (drafts.length) {
       message += `📝 **Recent Drafts (not scheduled)**\n`;
       drafts.forEach((d) => {
-        const preview = d.text ? (d.text.length > 40 ? d.text.substring(0,40)+'...' : d.text) : '(Media draft)';
+        const preview = d.text
+          ? d.text.length > 40
+            ? d.text.substring(0, 40) + "..."
+            : d.text
+          : "(Media draft)";
         message += `• ${preview}\n`;
       });
     }
 
     const keyboard = new InlineKeyboard().text("❌ Close", "close_message");
 
-    await ctx.editMessageText(message, { 
-      reply_markup: keyboard, 
-      parse_mode: "Markdown" 
+    await ctx.editMessageText(message, {
+      reply_markup: keyboard,
+      parse_mode: "Markdown",
     });
-
   } catch (error) {
     logger.error({ error, userId }, "Error showing scheduled posts");
-    await ctx.editMessageText("❌ **Error loading scheduled posts**\n\nPlease try again later.", { parse_mode: "Markdown" });
+    await ctx.editMessageText(
+      "❌ **Error loading scheduled posts**\n\nPlease try again later.",
+      { parse_mode: "Markdown" },
+    );
   }
 }
 
 /**
  * Handle post cancellation
  */
-async function handleCancelPost(ctx: BotContext, postId: string): Promise<void> {
+async function handleCancelPost(
+  ctx: BotContext,
+  postId: string,
+): Promise<void> {
   const userId = ctx.from?.id;
   if (!userId) return;
 
@@ -440,20 +547,23 @@ async function handleCancelPost(ctx: BotContext, postId: string): Promise<void> 
 
   try {
     const result = await postScheduler.cancelScheduledPost(postId, userId);
-    
+
     if (result.success) {
       await ctx.editMessageText(
         "✅ **Post cancelled successfully**\n\nThe scheduled post has been cancelled and moved back to drafts.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
     } else {
       await ctx.editMessageText(
         `❌ **Cancellation failed**\n\n${result.error}`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
     }
   } catch (error) {
     logger.error({ error, userId, postId }, "Error cancelling post");
-    await ctx.editMessageText("❌ **Error cancelling post**\n\nPlease try again later.", { parse_mode: "Markdown" });
+    await ctx.editMessageText(
+      "❌ **Error cancelling post**\n\nPlease try again later.",
+      { parse_mode: "Markdown" },
+    );
   }
 }

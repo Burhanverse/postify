@@ -1,7 +1,7 @@
 import { Bot } from "grammy";
-import { BotContext } from "../telegram/bot.js";
-import { logger } from "../utils/logger.js";
-import { ChannelModel } from "../models/Channel.js";
+import { BotContext } from "../telegram/bot";
+import { logger } from "../utils/logger";
+import { ChannelModel } from "../models/Channel";
 
 export function registerCoreCommands(bot: Bot<BotContext>) {
   bot.command("start", async (ctx) => {
@@ -13,26 +13,26 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
   bot.command("help", async (ctx) => {
     await ctx.reply(
       "📝 **COMMANDS**\n" +
-      "/addchannel - connect a channel\n" +
-      "/channels - list your channels\n" +
-      "/usechannel <chatId> - set active channel\n" +
-      "/checkchannels - validate bot permissions in channels\n" +
-      "/newpost - create a draft (with Send Now option)\n" +
-      "/addbutton - add a button to draft\n" +
-      "/preview - preview current draft\n" +
-      "/schedule [in <min>|ISO] - schedule draft\n" +
-      "/queue - list scheduled posts\n" +
-      "/listposts - list all posts\n" +
-      "/admins - list admins\n" +
-      "/addadmin <id> <roles> - add/update admin\n" +
-      "/rmadmin <id> - remove admin\n\n" +
-      "✨ **TEXT FORMATTING**\n" +
-      "<b>bold text</b>\n" +
-      "<i>italic text</i>\n" +
-      "<code>inline code</code>\n" +
-      "<pre>code block</pre>\n" +
-      "<blockquote>quoted text</blockquote>",
-      { parse_mode: "HTML" }
+        "/addchannel - connect a channel\n" +
+        "/channels - list your channels\n" +
+        "/usechannel <chatId> - set active channel (affects /admins, /addadmin, /rmadmin, /queue)\n" +
+        "/checkchannels - verify bot posting permissions for all linked channels\n" +
+        "/newpost - create a draft (with Send Now option)\n" +
+        "/addbutton - add a button to draft\n" +
+        "/preview - preview current draft\n" +
+        "/schedule [in <min>|ISO] - schedule draft\n" +
+        "/queue - list scheduled posts\n" +
+        "/listposts - list all posts\n" +
+        "/admins - list admins\n" +
+        "/addadmin <id> <roles> - add/update admin\n" +
+        "/rmadmin <id> - remove admin\n\n" +
+        "✨ **TEXT FORMATTING**\n" +
+        "<b>bold text</b>\n" +
+        "<i>italic text</i>\n" +
+        "<code>inline code</code>\n" +
+        "<pre>code block</pre>\n" +
+        "<blockquote>quoted text</blockquote>",
+      { parse_mode: "Markdown" },
     );
   });
 
@@ -148,16 +148,19 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     for (const channel of channels) {
       try {
         const member = await ctx.api.getChatMember(channel.chatId, me.id);
-        const canPost = member.status === "administrator" || member.status === "creator";
-        
+        const canPost =
+          member.status === "administrator" || member.status === "creator";
+
         const status = canPost ? "✅ Working" : "⚠️ No posting permission";
-        const channelName = channel.title || channel.username || channel.chatId.toString();
-        
+        const channelName =
+          channel.title || channel.username || channel.chatId.toString();
+
         response += `**${channelName}**\n`;
         response += `Status: ${status}\n`;
         response += `ID: \`${channel.chatId}\`\n\n`;
       } catch (error) {
-        const channelName = channel.title || channel.username || channel.chatId.toString();
+        const channelName =
+          channel.title || channel.username || channel.chatId.toString();
         response += `**${channelName}**\n`;
         response += `Status: ❌ Bot removed or no access\n`;
         response += `ID: \`${channel.chatId}\`\n\n`;
@@ -173,13 +176,13 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       { command: "addchannel", description: "Connect a channel" },
       { command: "newpost", description: "Create a draft" },
       { command: "channels", description: "List connected channels" },
-      { command: "usechannel", description: "Select active channel" },
-      { command: "checkchannels", description: "Validate channel permissions" },
       { command: "addbutton", description: "Add button to draft" },
       { command: "preview", description: "Preview draft" },
       { command: "schedule", description: "Schedule last draft" },
       { command: "queue", description: "List scheduled posts" },
       { command: "listposts", description: "List all posts" },
+      { command: "usechannel", description: "Select active channel (admin ops)" },
+      { command: "checkchannels", description: "Verify channel permissions" },
       { command: "admins", description: "Manage channel admins" },
       { command: "addadmin", description: "Grant roles to user" },
       { command: "rmadmin", description: "Remove admin user" },

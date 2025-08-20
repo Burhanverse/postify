@@ -1,6 +1,6 @@
 import { Bot, InlineKeyboard } from "grammy";
-import { BotContext } from "../telegram/bot.js";
-import { ChannelModel } from "../models/Channel.js";
+import { BotContext } from "../telegram/bot";
+import { ChannelModel } from "../models/Channel";
 
 function buildChannelsKeyboard(
   channels: {
@@ -47,7 +47,10 @@ export async function handleChannelCallback(ctx: BotContext) {
   }
   if ((action === "i" || action === "u" || action === "uc") && !channel) {
     await ctx.answerCallbackQuery();
-    await ctx.reply("❌ **Channel not found**\n\nThe selected channel no longer exists or has been removed.", { parse_mode: "Markdown" });
+    await ctx.reply(
+      "❌ **Channel not found**\n\nThe selected channel no longer exists or has been removed.",
+      { parse_mode: "Markdown" },
+    );
     return true;
   }
 
@@ -71,20 +74,26 @@ export async function handleChannelCallback(ctx: BotContext) {
       { $pull: { owners: ctx.from?.id } },
     );
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(`✅ **Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`, { parse_mode: "Markdown" });
+    await ctx.editMessageText(
+      `✅ **Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`,
+      { parse_mode: "Markdown" },
+    );
   } else if (action === "list") {
     const channels = await ChannelModel.find({ owners: ctx.from?.id })
       .limit(25)
       .lean();
     if (!channels.length) {
       await ctx.answerCallbackQuery();
-      await ctx.editMessageText("📭 **No channels linked**\n\nUse /addchannel to connect your first channel.", { parse_mode: "Markdown" });
+      await ctx.editMessageText(
+        "📭 **No channels linked**\n\nUse /addchannel to connect your first channel.",
+        { parse_mode: "Markdown" },
+      );
       return true;
     }
     await ctx.answerCallbackQuery();
     await ctx.editMessageText("📋 **Your channels:**", {
       reply_markup: buildChannelsKeyboard(channels),
-      parse_mode: "Markdown"
+      parse_mode: "Markdown",
     });
   }
   return true;

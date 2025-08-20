@@ -24,7 +24,10 @@ async function cleanupSession(ctx: BotContext) {
     // Clean up expired draft mode states
     if (ctx.session.draftEditMode && !ctx.session.draft) {
       delete ctx.session.draftEditMode;
-      logger.debug({ userId: ctx.from?.id }, "Cleaned up orphaned draft edit mode");
+      logger.debug(
+        { userId: ctx.from?.id },
+        "Cleaned up orphaned draft edit mode",
+      );
     }
 
     // Clean up orphaned preview message references
@@ -33,17 +36,22 @@ async function cleanupSession(ctx: BotContext) {
       delete ctx.session.lastDraftTextMessageId;
       delete ctx.session.draftSourceMessages;
       delete ctx.session.initialDraftMessageId;
-      logger.debug({ userId: ctx.from?.id }, "Cleaned up orphaned draft preview references");
+      logger.debug(
+        { userId: ctx.from?.id },
+        "Cleaned up orphaned draft preview references",
+      );
     }
 
     // Clean up temporary states
     cleanupTemporaryStates(ctx);
-
   } catch (error) {
-    logger.error({
-      error: error instanceof Error ? error.message : String(error),
-      userId: ctx.from?.id
-    }, "Session cleanup error");
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: ctx.from?.id,
+      },
+      "Session cleanup error",
+    );
   }
 }
 
@@ -55,9 +63,9 @@ function cleanupTemporaryStates(ctx: BotContext) {
 
   // List of temporary session keys that should be cleaned up after certain operations
   const temporaryKeys = [
-    'awaitingChannelRef',
-    'tempMessageId',
-    'lastErrorTime'
+    "awaitingChannelRef",
+    "tempMessageId",
+    "lastErrorTime",
   ];
 
   let cleanedCount = 0;
@@ -69,10 +77,13 @@ function cleanupTemporaryStates(ctx: BotContext) {
   }
 
   if (cleanedCount > 0) {
-    logger.debug({ 
-      userId: ctx.from?.id, 
-      cleanedKeys: cleanedCount 
-    }, "Cleaned up temporary session states");
+    logger.debug(
+      {
+        userId: ctx.from?.id,
+        cleanedKeys: cleanedCount,
+      },
+      "Cleaned up temporary session states",
+    );
   }
 }
 
@@ -88,14 +99,14 @@ export function clearDraftSession(ctx: BotContext) {
   delete ctx.session.draftSourceMessages;
   delete ctx.session.initialDraftMessageId;
   delete ctx.session.draftEditMode;
-  
+
   logger.debug({ userId: ctx.from?.id }, "Draft session cleared");
 }
 
 export function clearChannelSession(ctx: BotContext) {
   delete ctx.session.selectedChannelChatId;
   delete ctx.session.awaitingChannelRef;
-  
+
   logger.debug({ userId: ctx.from?.id }, "Channel session cleared");
 }
 
@@ -111,7 +122,7 @@ export class SessionManager {
   static isStale(userId: number): boolean {
     const lastActivity = this.staleSessions.get(userId);
     if (!lastActivity) return false;
-    
+
     return Date.now() - lastActivity > this.STALE_THRESHOLD;
   }
 

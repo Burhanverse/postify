@@ -1,4 +1,8 @@
-import Fastify, { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import Fastify, {
+  FastifyInstance,
+  FastifyReply,
+  FastifyRequest,
+} from "fastify";
 import mongoose from "mongoose";
 import { getAgenda } from "./services/agenda";
 import { env } from "./config/env";
@@ -107,7 +111,9 @@ export function startHttpServer(): FastifyInstance {
   const app = createServer();
   app
     .listen({ port: env.PORT, host: "0.0.0.0" })
-    .then((address: string) => logger.info({ address }, "HTTP server listening"))
+    .then((address: string) =>
+      logger.info({ address }, "HTTP server listening"),
+    )
     .catch((err: unknown) => {
       logger.error({ err }, "HTTP server failed to start");
       process.exit(1);

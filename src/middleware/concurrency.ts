@@ -18,19 +18,26 @@ class ConcurrencyManager {
     setInterval(() => this.cleanupExpiredLocks(), 60000);
   }
 
-  async acquireLock(userId: number, resource: string, action: string): Promise<boolean> {
+  async acquireLock(
+    userId: number,
+    resource: string,
+    action: string,
+  ): Promise<boolean> {
     const lockKey = `${resource}:${userId}`;
     const now = Date.now();
 
     // Check if lock already exists and is still valid
     const existingLock = this.locks.get(lockKey);
-    if (existingLock && (now - existingLock.timestamp) < this.lockTimeout) {
-      logger.debug({
-        userId,
-        resource,
-        action,
-        existingAction: existingLock.action
-      }, "Lock already exists for user resource");
+    if (existingLock && now - existingLock.timestamp < this.lockTimeout) {
+      logger.debug(
+        {
+          userId,
+          resource,
+          action,
+          existingAction: existingLock.action,
+        },
+        "Lock already exists for user resource",
+      );
       return false;
     }
 
@@ -44,11 +51,11 @@ class ConcurrencyManager {
       userId,
       action,
       timestamp: now,
-      promise: lockPromise
+      promise: lockPromise,
     };
 
     this.locks.set(lockKey, lockEntry);
-    
+
     // Track user locks
     if (!this.userLocks.has(userId)) {
       this.userLocks.set(userId, new Set());
@@ -60,12 +67,15 @@ class ConcurrencyManager {
       this.releaseLock(userId, resource);
     }, this.lockTimeout);
 
-    logger.debug({
-      userId,
-      resource,
-      action,
-      lockKey
-    }, "Lock acquired");
+    logger.debug(
+      {
+        userId,
+        resource,
+        action,
+        lockKey,
+      },
+      "Lock acquired",
+    );
 
     return true;
   }
@@ -73,10 +83,10 @@ class ConcurrencyManager {
   releaseLock(userId: number, resource: string): void {
     const lockKey = `${resource}:${userId}`;
     const lock = this.locks.get(lockKey);
-    
+
     if (lock) {
       this.locks.delete(lockKey);
-      
+
       // Remove from user locks
       const userLockSet = this.userLocks.get(userId);
       if (userLockSet) {
@@ -86,11 +96,14 @@ class ConcurrencyManager {
         }
       }
 
-      logger.debug({
-        userId,
-        resource,
-        lockKey
-      }, "Lock released");
+      logger.debug(
+        {
+          userId,
+          resource,
+          lockKey,
+        },
+        "Lock released",
+      );
     }
   }
 
@@ -99,9 +112,9 @@ class ConcurrencyManager {
     let cleanedCount = 0;
 
     for (const [lockKey, lock] of this.locks.entries()) {
-      if ((now - lock.timestamp) > this.lockTimeout) {
+      if (now - lock.timestamp > this.lockTimeout) {
         this.locks.delete(lockKey);
-        
+
         // Remove from user locks
         const userLockSet = this.userLocks.get(lock.userId);
         if (userLockSet) {
@@ -110,7 +123,7 @@ class ConcurrencyManager {
             this.userLocks.delete(lock.userId);
           }
         }
-        
+
         cleanedCount++;
       }
     }
@@ -123,11 +136,11 @@ class ConcurrencyManager {
   isLocked(userId: number, resource: string): boolean {
     const lockKey = `${resource}:${userId}`;
     const lock = this.locks.get(lockKey);
-    
+
     if (!lock) return false;
-    
+
     const now = Date.now();
-    return (now - lock.timestamp) < this.lockTimeout;
+    return now - lock.timestamp < this.lockTimeout;
   }
 
   getUserActiveLocks(userId: number): string[] {
@@ -157,11 +170,16 @@ export async function concurrencyMiddleware(
     return;
   }
 
-  const acquired = await concurrencyManager.acquireLock(userId, resource, action);
-  
+  const acquired = await concurrencyManager.acquireLock(
+    userId,
+    resource,
+    action,
+  );
+
   if (!acquired) {
-    const message = "⏳ Please wait for your previous action to complete before starting a new one.";
-    
+    const message =
+      "⏳ Please wait for your previous action to complete before starting a new one.";
+
     try {
       if (ctx.callbackQuery) {
         await ctx.answerCallbackQuery({ text: message, show_alert: true });
@@ -169,12 +187,15 @@ export async function concurrencyMiddleware(
         await ctx.reply(message);
       }
     } catch (error) {
-      logger.error({
-        error: error instanceof Error ? error.message : String(error),
-        userId,
-        resource,
-        action
-      }, "Failed to send concurrency message");
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          userId,
+          resource,
+          action,
+        },
+        "Failed to send concurrency message",
+      );
     }
     return;
   }
@@ -188,11 +209,13 @@ export async function concurrencyMiddleware(
 
 function getResourceFromContext(ctx: BotContext): string {
   const userId = ctx.from?.id;
-  
+
   // For draft operations, lock per user
-  if (ctx.message?.text?.startsWith('/newpost') || 
-      ctx.callbackQuery?.data?.startsWith('draft:') ||
-      (ctx.session && ctx.session.draft)) {
+  if (
+    ctx.message?.text?.startsWith("/newpost") ||
+    ctx.callbackQuery?.data?.startsWith("draft:") ||
+    (ctx.session && ctx.session.draft)
+  ) {
     return `draft:${userId}`;
   }
 
@@ -202,7 +225,7 @@ function getResourceFromContext(ctx: BotContext): string {
   }
 
   // For scheduling operations, lock per user
-  if (ctx.message?.text?.startsWith('/schedule')) {
+  if (ctx.message?.text?.startsWith("/schedule")) {
     return `schedule:${userId}`;
   }
 
@@ -211,20 +234,26 @@ function getResourceFromContext(ctx: BotContext): string {
 }
 
 function getActionFromContext(ctx: BotContext): string {
-  if (ctx.message?.text?.startsWith('/')) {
-    return ctx.message.text.split(' ')[0];
+  if (ctx.message?.text?.startsWith("/")) {
+    return ctx.message.text.split(" ")[0];
   }
   if (ctx.callbackQuery?.data) {
-    return `callback:${ctx.callbackQuery.data.split(':')[0]}`;
+    return `callback:${ctx.callbackQuery.data.split(":")[0]}`;
   }
-  return 'message';
+  return "message";
 }
 
 function isReadOnlyAction(action: string): boolean {
   const readOnlyActions = [
-    '/help', '/start', '/listposts', '/queue', '/channels',
-    '/admins', '/checkchannels', 'callback:preview'
+    "/help",
+    "/start",
+    "/listposts",
+    "/queue",
+    "/channels",
+    "/admins",
+    "/checkchannels",
+    "callback:preview",
   ];
-  
-  return readOnlyActions.includes(action) || action.startsWith('callback:list');
+
+  return readOnlyActions.includes(action) || action.startsWith("callback:list");
 }

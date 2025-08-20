@@ -38,11 +38,7 @@ export interface SessionData {
   lastDraftTextMessageId?: number; // (legacy single id - kept for backward compatibility)
   draftSourceMessages?: { id: number; html: string }[]; // list of user message ids & formatted html composing draft
   initialDraftMessageId?: number; // id of first user text message starting the draft
-  draftEditMode?:
-    | "text"
-    | "button"
-    | "cron"
-    | null;
+  draftEditMode?: "text" | "button" | "cron" | null;
   waitingForScheduleInput?: boolean; // true when user is entering custom scheduling time
   controlMessageId?: number; // reusable main UI message id
   scheduleMessageId?: number; // scheduling submenu message id
@@ -57,13 +53,13 @@ export type BotContext = Context & SessionFlavor<SessionData>;
 export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
 // Apply middleware in correct order
-bot.use(loggingMiddleware);        // Log all requests (first for tracking)
-bot.use(errorHandlerMiddleware);   // Catch and handle all errors
-bot.use(session({ initial }));    // Session management (early, before others need it)
-bot.use(validationMiddleware);     // Validate input
-bot.use(rateLimitMiddleware);      // Rate limiting
-bot.use(concurrencyMiddleware);    // Concurrency control
-bot.use(userMiddleware);           // User management
+bot.use(loggingMiddleware); // Log all requests (first for tracking)
+bot.use(errorHandlerMiddleware); // Catch and handle all errors
+bot.use(session({ initial })); // Session management (early, before others need it)
+bot.use(validationMiddleware); // Validate input
+bot.use(rateLimitMiddleware); // Rate limiting
+bot.use(concurrencyMiddleware); // Concurrency control
+bot.use(userMiddleware); // User management
 bot.use(sessionCleanupMiddleware); // Session cleanup (last)
 
 registerCoreCommands(bot);
@@ -81,26 +77,35 @@ bot.on("callback_query:data", async (ctx) => {
 // Enhanced error handling
 bot.catch((err) => {
   const { ctx, error } = err;
-  
-  logger.error({
-    error: error instanceof Error ? error.message : String(error),
-    stack: error instanceof Error ? error.stack : undefined,
-    userId: ctx?.from?.id,
-    chatId: ctx?.chat?.id,
-    updateType: ctx?.update.message ? 'message' : 
-                ctx?.update.callback_query ? 'callback_query' : 'unknown'
-  }, "Unhandled bot error");
-  
+
+  logger.error(
+    {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      userId: ctx?.from?.id,
+      chatId: ctx?.chat?.id,
+      updateType: ctx?.update.message
+        ? "message"
+        : ctx?.update.callback_query
+          ? "callback_query"
+          : "unknown",
+    },
+    "Unhandled bot error",
+  );
+
   // Try to inform user about the error
   if (ctx) {
     try {
       if (ctx.callbackQuery) {
-        ctx.answerCallbackQuery({ 
-          text: "❌ An unexpected error occurred. Please try again.", 
-          show_alert: true 
-        }).catch(() => {}); // Silent fail
+        ctx
+          .answerCallbackQuery({
+            text: "❌ An unexpected error occurred. Please try again.",
+            show_alert: true,
+          })
+          .catch(() => {}); // Silent fail
       } else {
-        ctx.reply("❌ An unexpected error occurred. Please try again later.")
+        ctx
+          .reply("❌ An unexpected error occurred. Please try again later.")
           .catch(() => {}); // Silent fail
       }
     } catch {

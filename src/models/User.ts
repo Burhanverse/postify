@@ -25,6 +25,6 @@ export type User = InferSchemaType<typeof UserSchema> & {
     timezone?: string;
     lastSchedulePreset?: string;
     lastCustomScheduleInput?: string;
-  }
+  };
 };
 export const UserModel = model("User", UserSchema);
