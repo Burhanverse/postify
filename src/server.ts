@@ -81,7 +81,6 @@ export function createServer(): FastifyInstance {
  <li>Multiple channels per admin</li>
  <li>Draft creation (text, media, buttons)</li>
  <li>Scheduling & recurring jobs</li>
- <li>Auto delete</li>
  <li>Inline buttons</li>
 </ul>
 <h2>Usage</h2>

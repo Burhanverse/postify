@@ -16,14 +16,14 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       "/addchannel - connect a channel\n" +
       "/channels - list your channels\n" +
       "/usechannel <chatId> - set active channel\n" +
+      "/checkchannels - validate bot permissions in channels\n" +
       "/newpost - create a draft (with Send Now option)\n" +
       "/addbutton - add a button to draft\n" +
       "/preview - preview current draft\n" +
       "/schedule [in <min>|ISO] - schedule draft\n" +
       "/recurring <cron> - schedule recurring draft\n" +
       "/queue - list scheduled posts\n" +
-      "/editpost <id> - load scheduled post into draft\n" +
-      "/deletepost <id> - delete a scheduled post\n" +
+      "/listposts - list all posts\n" +
       "/admins - list admins\n" +
       "/addadmin <id> <roles> - add/update admin\n" +
       "/rmadmin <id> - remove admin\n\n" +
@@ -130,7 +130,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
           title,
           type,
           inviteLink,
-          permissions: { canPost: true, canEdit: true, canDelete: true },
+          permissions: { canPost: true },
         },
         $addToSet: { owners: ctx.from?.id },
       },
@@ -141,17 +141,52 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     await ctx.reply(`Channel linked: ${title || username || chatId}`);
   });
 
+  bot.command("checkchannels", async (ctx) => {
+    const channels = await ChannelModel.find({ owners: ctx.from?.id });
+    if (!channels.length) {
+      await ctx.reply("No channels linked. Use /addchannel to link a channel.");
+      return;
+    }
+
+    let response = "🔍 **Channel Status Check:**\n\n";
+    const me = await ctx.api.getMe();
+
+    for (const channel of channels) {
+      try {
+        const member = await ctx.api.getChatMember(channel.chatId, me.id);
+        const canPost = member.status === "administrator" || member.status === "creator";
+        
+        const status = canPost ? "✅ Working" : "⚠️ No posting permission";
+        const channelName = channel.title || channel.username || channel.chatId.toString();
+        
+        response += `**${channelName}**\n`;
+        response += `Status: ${status}\n`;
+        response += `ID: \`${channel.chatId}\`\n\n`;
+      } catch (error) {
+        const channelName = channel.title || channel.username || channel.chatId.toString();
+        response += `**${channelName}**\n`;
+        response += `Status: ❌ Bot removed or no access\n`;
+        response += `ID: \`${channel.chatId}\`\n\n`;
+      }
+    }
+
+    response += "💡 *Use /addchannel to re-add problematic channels*";
+    await ctx.reply(response, { parse_mode: "Markdown" });
+  });
+
   bot.api
     .setMyCommands([
       { command: "addchannel", description: "Connect a channel" },
       { command: "channels", description: "List connected channels" },
       { command: "usechannel", description: "Select active channel" },
+      { command: "checkchannels", description: "Validate channel permissions" },
       { command: "newpost", description: "Create a draft" },
       { command: "addbutton", description: "Add button to draft" },
       { command: "preview", description: "Preview draft" },
       { command: "schedule", description: "Schedule last draft" },
       { command: "recurring", description: "Schedule recurring draft" },
       { command: "queue", description: "List scheduled posts" },
+      { command: "listposts", description: "List all posts" },
       { command: "admins", description: "Manage channel admins" },
       { command: "addadmin", description: "Grant roles to user" },
       { command: "rmadmin", description: "Remove admin user" },

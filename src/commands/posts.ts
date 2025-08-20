@@ -1,7 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 import type { Message, PhotoSize, Video } from "grammy/types";
 import { BotContext } from "../telegram/bot";
-import { PostModel } from "../models/Post";
+import { PostModel, Post } from "../models/Post";
 import { ChannelModel } from "../models/Channel";
 import { schedulePost, scheduleRecurring } from "../services/agenda";
 import { formatToHtml } from "../utils/format";
@@ -14,6 +14,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   async function renderDraftPreview(ctx: BotContext) {
     const d = ctx.session.draft;
     if (!d) return;
+    
     const kb = new InlineKeyboard();
     // Row: type switch
     kb.text(d.postType === "text" ? "📝 Text" : "Text", "draft:type:text")
@@ -26,6 +27,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     kb.text("👁 Preview", "draft:preview")
       .text("🧹 Clear", "draft:clear")
       .row();
+    
+    // Standard buttons for creating new posts
     kb.text("📤 Send", "draft:send")
       .text("✖️ Cancel", "draft:cancel")
       .row();
@@ -123,23 +126,66 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   });
 
   bot.command("newpost", async (ctx) => {
-  ctx.session.draft = { postType: "text", buttons: [] };
-    delete ctx.session.draftPreviewMessageId;
-  delete ctx.session.lastDraftTextMessageId;
-  delete ctx.session.draftSourceMessages;
-  delete ctx.session.initialDraftMessageId;
+    // First, get user's channels
+    const channels = await ChannelModel.find({ owners: ctx.from?.id });
+    
+    if (!channels.length) {
+      await ctx.reply(
+        "❌ **No channels found!**\n\n" +
+        "You need to link at least one channel before creating posts.\n" +
+        "Use /addchannel to connect a channel first.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    if (channels.length === 1) {
+      // If only one channel, auto-select it and proceed
+      const channel = channels[0];
+      ctx.session.selectedChannelChatId = channel.chatId;
+      
+      ctx.session.draft = { postType: "text", buttons: [] };
+      delete ctx.session.draftPreviewMessageId;
+      delete ctx.session.lastDraftTextMessageId;
+      delete ctx.session.draftSourceMessages;
+      delete ctx.session.initialDraftMessageId;
+      
+      await ctx.reply(
+        `📝 **Draft started for:** ${channel.title || channel.username || channel.chatId}\n\n` +
+        "Send text to add to your draft. Use HTML tags for formatting:\n" +
+        "• `<b>bold</b>` for **bold**\n" +
+        "• `<i>italic</i>` for *italic*\n" +
+        "• `<code>code</code>` for `code`\n" +
+        "• `<pre>code block</pre>` for code blocks\n" +
+        "• `<blockquote>quote</blockquote>` for quotes\n\n" +
+        "Use buttons below to configure, then **Send Now** to post immediately or schedule for later:",
+        { parse_mode: "Markdown" }
+      );
+      await renderDraftPreview(ctx);
+      return;
+    }
+
+    // Multiple channels - show selection
+    const keyboard = new InlineKeyboard();
+    
+    channels.forEach((channel) => {
+      const displayName = channel.title || 
+                         (channel.username ? `@${channel.username}` : 
+                         `Channel ${channel.chatId}`);
+      
+      keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
+    });
+    
+    keyboard.text("❌ Cancel", "newpost:cancel");
+    
     await ctx.reply(
-      "📝 **Interactive draft started!**\n\n" +
-      "Send text to add to your draft. Use HTML tags for formatting:\n" +
-      "• `<b>bold</b>` for **bold**\n" +
-      "• `<i>italic</i>` for *italic*\n" +
-      "• `<code>code</code>` for `code`\n" +
-      "• `<pre>code block</pre>` for code blocks\n" +
-      "• `<blockquote>quote</blockquote>` for quotes\n\n" +
-      "Use buttons below to configure, then **Send Now** to post immediately or schedule for later:",
-      { parse_mode: "Markdown" }
+      "📝 **Select a channel to create a post:**\n\n" +
+      "Choose which channel you want to create a post for:",
+      { 
+        reply_markup: keyboard,
+        parse_mode: "Markdown" 
+      }
     );
-    await renderDraftPreview(ctx);
   });
 
   bot.command("addbutton", async (ctx) => {
@@ -291,6 +337,56 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   // Callback interactions for draft editing
   bot.on("callback_query:data", async (ctx, next) => {
     const data = ctx.callbackQuery.data;
+    
+    // Handle newpost channel selection
+    if (data?.startsWith("newpost:")) {
+      const [, action, value] = data.split(":");
+      
+      if (action === "select") {
+        const chatId = Number(value);
+        const channel = await ChannelModel.findOne({
+          chatId,
+          owners: ctx.from?.id,
+        });
+        
+        if (!channel) {
+          await ctx.answerCallbackQuery({ text: "Channel not found or access denied" });
+          return;
+        }
+        
+        // Set selected channel and start draft
+        ctx.session.selectedChannelChatId = chatId;
+        ctx.session.draft = { postType: "text", buttons: [] };
+        delete ctx.session.draftPreviewMessageId;
+        delete ctx.session.lastDraftTextMessageId;
+        delete ctx.session.draftSourceMessages;
+        delete ctx.session.initialDraftMessageId;
+        
+        await ctx.answerCallbackQuery({ text: `Selected: ${channel.title || channel.username || chatId}` });
+        await ctx.editMessageText(
+          `📝 **Draft started for:** ${channel.title || channel.username || chatId}\n\n` +
+          "Send text to add to your draft. Use HTML tags for formatting:\n" +
+          "• \`<b>bold</b>\` for **bold**\n" +
+          "• \`<i>italic</i>\` for *italic*\n" +
+          "• \`<code>code</code>\` for \`code\`\n" +
+          "• \`<pre>code block</pre>\` for code blocks\n" +
+          "• \`<blockquote>quote</blockquote>\` for quotes\n\n" +
+          "Use buttons below to configure, then **Send Now** to post immediately or schedule for later:",
+          { parse_mode: "Markdown" }
+        );
+        await renderDraftPreview(ctx);
+        return;
+      }
+      
+      if (action === "cancel") {
+        await ctx.answerCallbackQuery({ text: "Cancelled" });
+        await ctx.editMessageText("❌ Post creation cancelled.");
+        return;
+      }
+      
+      return;
+    }
+    
     if (!data?.startsWith("draft:")) return next();
     if (!ctx.session.draft) {
       await ctx.answerCallbackQuery({ text: "No draft" });
@@ -308,23 +404,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "send") {
-      const kb = new InlineKeyboard()
-        .text("📤 Now", "draft:sendnow")
-        .text("⏰ Schedule", "draft:schedule")
-        .row()
-        .text("🔁 Recurring", "draft:cron")
-        .row()
-        .text("⬅ Back", "draft:back");
-      try {
-        if (ctx.session.draftPreviewMessageId) {
-          await ctx.api.editMessageReplyMarkup(ctx.chat!.id, ctx.session.draftPreviewMessageId, { reply_markup: kb });
-        }
-      } catch {}
-      await ctx.answerCallbackQuery();
-      return;
-    }
-    if (action === "send") {
-      // Show send submenu
       const kb = new InlineKeyboard()
         .text("📤 Now", "draft:sendnow")
         .text("⏰ Schedule", "draft:schedule")
@@ -440,53 +519,92 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "sendnow") {
       // Immediate send without scheduling
-      if (!ctx.session.draft?.text && !ctx.session.draft?.mediaFileId) {
+      const draft = ctx.session.draft;
+      if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
         await ctx.answerCallbackQuery({ text: "Draft is empty! Add text or media first." });
+        return;
+      }
+      
+      // Check if channel is selected
+      if (!ctx.session.selectedChannelChatId) {
+        await ctx.answerCallbackQuery({ text: "No channel selected! Use /newpost to select a channel." });
         return;
       }
       
       const channel = await ChannelModel.findOne({
         chatId: ctx.session.selectedChannelChatId,
         owners: ctx.from?.id,
-      }) || await ChannelModel.findOne({ owners: ctx.from?.id });
+      });
       
       if (!channel) {
-        await ctx.answerCallbackQuery({ text: "No linked channel! Use /addchannel first." });
+        await ctx.answerCallbackQuery({ text: "Selected channel not found! Please use /newpost to select a valid channel." });
         return;
       }
       
       try {
+        // Create the post in the database
         const post = await PostModel.create({
           channel: channel._id,
           channelChatId: channel.chatId,
           authorTgId: ctx.from?.id,
-          status: "published",
-          type: ctx.session.draft.postType || "text",
-          text: ctx.session.draft.text,
-          mediaFileId: ctx.session.draft.mediaFileId,
-          buttons: ctx.session.draft.buttons,
-          publishedAt: new Date(),
+          status: "draft", // Create as draft first
+          type: draft.postType || "text",
+          text: draft.text?.trim() || undefined,
+          mediaFileId: draft.mediaFileId || undefined,
+          buttons: draft.buttons || [],
         });
+        
+        console.log("Created post:", post._id.toString());
         
         // Publish immediately using the publisher service
         const { publishPost } = await import("../services/publisher");
-  await publishPost(post as unknown as (import("../models/Post").Post & { _id: Types.ObjectId }));
+        await publishPost(post as Post & { _id: Types.ObjectId });
         
-  delete ctx.session.draft;
+        console.log("Published post successfully");
+        
+        // Clear draft session
+        delete ctx.session.draft;
         delete ctx.session.draftPreviewMessageId;
         delete ctx.session.lastDraftTextMessageId;
-  delete ctx.session.draftSourceMessages;
-  delete ctx.session.initialDraftMessageId;
+        delete ctx.session.draftSourceMessages;
+        delete ctx.session.initialDraftMessageId;
         
         await ctx.answerCallbackQuery({ text: "✅ Posted successfully!" });
         await ctx.editMessageText("✅ Post sent successfully to channel!");
       } catch (error) {
+        console.error("Send now error:", error);
         await ctx.answerCallbackQuery({ text: "❌ Failed to send post" });
+        
+        // Try to provide more specific error information
+        if (error instanceof Error) {
+          if (error.message.includes("chat not found")) {
+            // For photo/video messages, we need to send a new message instead of editing
+            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
+              await ctx.reply("❌ Error: Channel not found. Please re-add the channel with /addchannel");
+            } else {
+              await ctx.editMessageText("❌ Error: Channel not found. Please re-add the channel with /addchannel");
+            }
+          } else if (error.message.includes("not enough rights")) {
+            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
+              await ctx.reply("❌ Error: Bot doesn't have permission to post. Grant posting rights to the bot.");
+            } else {
+              await ctx.editMessageText("❌ Error: Bot doesn't have permission to post. Grant posting rights to the bot.");
+            }
+          } else {
+            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
+              await ctx.reply(`❌ Error: ${error.message}`);
+            } else {
+              await ctx.editMessageText(`❌ Error: ${error.message}`);
+            }
+          }
+        } else {
+          if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
+            await ctx.reply("❌ Unknown error occurred while posting");
+          } else {
+            await ctx.editMessageText("❌ Unknown error occurred while posting");
+          }
+        }
       }
-      return;
-    }
-    if (action === "save") {
-      await ctx.answerCallbackQuery({ text: "Use Send Now, Schedule, or Recurring" });
       return;
     }
   });
@@ -569,6 +687,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (!ctx.session.draft) return ctx.reply("No draft. /newpost first.");
     if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId)
       return ctx.reply("Draft empty. Add text or media.");
+    
+    if (!ctx.session.selectedChannelChatId) {
+      return ctx.reply("No channel selected. Use /newpost to select a channel first.");
+    }
+    
     const args = ctx.match?.trim();
     let minutes = 2;
     let date: Date | undefined;
@@ -581,12 +704,14 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       }
     }
     const when = date || DateTime.utc().plus({ minutes }).toJSDate();
-    const channel =
-      (await ChannelModel.findOne({
-        chatId: ctx.session.selectedChannelChatId,
-        owners: ctx.from?.id,
-      })) || (await ChannelModel.findOne({ owners: ctx.from?.id }));
-    if (!channel) return ctx.reply("No linked channel. /addchannel first.");
+    
+    const channel = await ChannelModel.findOne({
+      chatId: ctx.session.selectedChannelChatId,
+      owners: ctx.from?.id,
+    });
+    
+    if (!channel) return ctx.reply("Selected channel not found. Use /newpost to select a valid channel.");
+    
     const post = await PostModel.create({
       channel: channel._id,
       channelChatId: channel.chatId,
@@ -600,7 +725,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     });
     await schedulePost((post._id as unknown as string).toString(), when, "UTC");
     delete ctx.session.draft;
-    await ctx.reply(`Post scheduled for ${when.toISOString()}`);
+    await ctx.reply(`Post scheduled for ${when.toISOString()} in channel: ${channel.title || channel.username || channel.chatId}`);
   });
 
   bot.command("recurring", async (ctx) => {
@@ -609,12 +734,18 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (!ctx.session.draft) return ctx.reply("Create a draft first.");
     if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId)
       return ctx.reply("Draft empty. Add text or media.");
-    const channel =
-      (await ChannelModel.findOne({
-        chatId: ctx.session.selectedChannelChatId,
-        owners: ctx.from?.id,
-      })) || (await ChannelModel.findOne({ owners: ctx.from?.id }));
-    if (!channel) return ctx.reply("No linked channel.");
+    
+    if (!ctx.session.selectedChannelChatId) {
+      return ctx.reply("No channel selected. Use /newpost to select a channel first.");
+    }
+    
+    const channel = await ChannelModel.findOne({
+      chatId: ctx.session.selectedChannelChatId,
+      owners: ctx.from?.id,
+    });
+    
+    if (!channel) return ctx.reply("Selected channel not found. Use /newpost to select a valid channel.");
+    
     const post = await PostModel.create({
       channel: channel._id,
       channelChatId: channel.chatId,
@@ -632,65 +763,113 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       "UTC",
     );
     delete ctx.session.draft;
-    await ctx.reply(`Recurring post scheduled with cron: ${args}`);
-  });
-
-  bot.command("editpost", async (ctx) => {
-    const arg = ctx.match?.trim();
-    if (!arg) return ctx.reply("Usage: /editpost <postId>");
-    const post = await PostModel.findById(arg);
-    if (!post) return ctx.reply("Post not found");
-    if (post.status !== "scheduled")
-      return ctx.reply("Only scheduled drafts can be edited");
-    ctx.session.draft = {
-      postType: post.type as "text" | "photo" | "video",
-      text: post.text || undefined,
-      mediaFileId: post.mediaFileId || undefined,
-      buttons: post.buttons as unknown as {
-        text: string;
-        url?: string;
-        callbackData?: string;
-      }[],
-    };
-    await ctx.reply(
-      "Loaded draft for editing. Modify and /schedule again to update (old schedule persists time unless you reschedule).",
-    );
-  });
-
-  bot.command("deletepost", async (ctx) => {
-    const arg = ctx.match?.trim();
-    if (!arg) return ctx.reply("Usage: /deletepost <postId>");
-    const post = await PostModel.findById(arg);
-    if (!post) return ctx.reply("Not found");
-    if (post.status === "published")
-      return ctx.reply("Already published (use channel delete manually).");
-    await PostModel.deleteOne({ _id: post._id });
-    await ctx.reply("Post deleted.");
+    await ctx.reply(`Recurring post scheduled with cron: ${args} for channel: ${channel.title || channel.username || channel.chatId}`);
   });
 
   bot.command("queue", async (ctx) => {
-    const channel = await ChannelModel.findOne({ owners: ctx.from?.id });
+    let channel;
+    
+    if (ctx.session.selectedChannelChatId) {
+      channel = await ChannelModel.findOne({
+        chatId: ctx.session.selectedChannelChatId,
+        owners: ctx.from?.id,
+      });
+    }
+    
     if (!channel) {
-      await ctx.reply("No linked channel.");
+      channel = await ChannelModel.findOne({ owners: ctx.from?.id });
+    }
+    
+    if (!channel) {
+      await ctx.reply("No linked channel. Use /addchannel to link a channel first.");
       return;
     }
+    
     const upcoming = await PostModel.find({
       channel: channel._id,
       status: "scheduled",
     })
       .sort({ scheduledAt: 1 })
       .limit(10);
+      
     if (!upcoming.length) {
-      await ctx.reply("Queue empty.");
+      await ctx.reply(`Queue empty for channel: ${channel.title || channel.username || channel.chatId}`);
       return;
     }
-    await ctx.reply(
-      upcoming
-        .map(
-          (p) =>
-            `${(p._id as unknown as string).toString()} -> ${p.recurrence?.cron ? "(cron " + p.recurrence.cron + ")" : p.scheduledAt?.toISOString()}`,
-        )
-        .join("\n"),
-    );
+    
+    let response = `📅 **Scheduled Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
+    upcoming.forEach((p, index) => {
+      const timeInfo = p.recurrence?.cron 
+        ? `(cron: ${p.recurrence.cron})` 
+        : p.scheduledAt?.toISOString() || "No time set";
+      
+      const preview = p.text ? 
+        (p.text.length > 50 ? p.text.substring(0, 50) + "..." : p.text) : 
+        "(No text)";
+        
+      response += `${index + 1}. **${p._id.toString()}**\n`;
+      response += `   📝 ${preview}\n`;
+      response += `   ⏰ ${timeInfo}\n\n`;
+    });
+    
+    await ctx.reply(response, { parse_mode: "Markdown" });
+  });
+
+  bot.command("listposts", async (ctx) => {
+    let channel;
+    
+    if (ctx.session.selectedChannelChatId) {
+      channel = await ChannelModel.findOne({
+        chatId: ctx.session.selectedChannelChatId,
+        owners: ctx.from?.id,
+      });
+    }
+    
+    if (!channel) {
+      channel = await ChannelModel.findOne({ owners: ctx.from?.id });
+    }
+    
+    if (!channel) {
+      await ctx.reply("No linked channel. Use /addchannel to link a channel first.");
+      return;
+    }
+    
+    const [scheduled, published] = await Promise.all([
+      PostModel.find({ channel: channel._id, status: "scheduled" })
+        .sort({ scheduledAt: 1 })
+        .limit(5),
+      PostModel.find({ channel: channel._id, status: "published" })
+        .sort({ publishedAt: -1 })
+        .limit(5)
+    ]);
+    
+    let response = `📋 **Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
+    
+    if (scheduled.length > 0) {
+      response += "📅 **Scheduled Posts:**\n";
+      scheduled.forEach((p, index) => {
+        const preview = p.text ? 
+          (p.text.length > 40 ? p.text.substring(0, 40) + "..." : p.text) : 
+          "(No text)";
+        response += `${index + 1}. ${preview}\n`;
+      });
+      response += "\n";
+    }
+    
+    if (published.length > 0) {
+      response += "📢 **Published Posts:**\n";
+      published.forEach((p, index) => {
+        const preview = p.text ? 
+          (p.text.length > 40 ? p.text.substring(0, 40) + "..." : p.text) : 
+          "(No text)";
+        response += `${index + 1}. ${preview}\n`;
+      });
+    }
+    
+    if (scheduled.length === 0 && published.length === 0) {
+      response += "No posts found. Create your first post with /newpost";
+    }
+    
+    await ctx.reply(response, { parse_mode: "Markdown" });
   });
 }

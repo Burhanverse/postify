@@ -3,7 +3,7 @@ import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { PostModel } from "../models/Post";
 // Import publisher (ensure extension for ESM resolution)
-import { publishPost, deletePublishedPost } from "./publisher";
+import { publishPost } from "./publisher";
 import { DateTime } from "luxon";
 // (Cron validation removed with analytics cleanup; rely on Agenda to handle schedule format)
 
@@ -22,20 +22,9 @@ export async function initAgenda() {
     if (!post) return;
     try {
       await publishPost(post);
-      if (post.autoDeleteAt) {
-        await agenda.schedule(post.autoDeleteAt, "auto_delete_post", {
-          postId,
-        });
-      }
     } catch (err) {
       logger.error({ err }, "Failed to publish post");
     }
-  });
-
-  agenda.define("auto_delete_post", async (job: Job) => {
-    const { postId } = job.attrs.data as { postId: string };
-    await deletePublishedPost(postId);
-    logger.info({ postId }, "Auto delete executed");
   });
 
   await agenda.start();

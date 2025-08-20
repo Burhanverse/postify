@@ -16,7 +16,7 @@ const PostSchema = new Schema(
     authorTgId: { type: Number, index: true },
     status: {
       type: String,
-      enum: ["draft", "scheduled", "published", "deleted"],
+      enum: ["draft", "scheduled", "published"],
       index: true,
     },
     type: { type: String, enum: ["text", "photo", "video"], default: "text" },
@@ -25,7 +25,6 @@ const PostSchema = new Schema(
     buttons: [InlineButtonSchema],
     scheduledAt: Date,
     recurrence: { cron: String, timezone: String },
-    autoDeleteAt: Date,
     publishedMessageId: Number,
     publishedAt: Date,
     meta: { type: Map, of: String },

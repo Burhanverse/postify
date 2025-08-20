@@ -34,7 +34,6 @@ export interface SessionData {
     | "button"
     | "schedule_time"
     | "cron"
-    | "auto_delete"
     | null;
 }
 

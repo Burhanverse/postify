@@ -10,8 +10,6 @@ A Telegram channel management & scheduling bot (Controller Bot alternative) buil
 | Permission checks (admin rights)      | Basic (post rights)          |
 | Multiple channels per admin           | Implemented                  |
 | Draft creation (text, media, buttons) | Implemented                  |
-| Post editing & deletion               | Pending                      |
-| Crossposting / forwarding             | Pending                      |
 | Scheduling & recurring (cron)         | Basic (one-off, cron helper) |
 | Queues & auto-publish                 | Basic list                   |
 | Auto delete                           | Implemented (job)            |
