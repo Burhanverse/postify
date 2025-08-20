@@ -96,7 +96,19 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       ctx.session.draftPreviewMessageId = sent.message_id;
       ctx.session.controlMessageId = sent.message_id;
     };
-    await sendOrEdit();
+    try {
+      await sendOrEdit();
+      logger.debug({ userId: ctx.from?.id, chatId: ctx.chat?.id }, "Draft preview rendered");
+    } catch (err) {
+      logger.error({ err, userId: ctx.from?.id, chatId: ctx.chat?.id }, "Failed to render draft preview");
+      const friendly =
+        err instanceof Error && /can't parse entities|entity/i.test(err.message)
+          ? "❌ Formatting error in your text. Check unclosed <b>, <i>, <code>, <pre>, or <a> tags."
+          : "❌ Failed to update preview. Please try editing or sending text again.";
+      try {
+        await ctx.reply(friendly, { parse_mode: "Markdown" });
+      } catch {}
+    }
   }
 
   bot.command("usechannel", async (ctx) => {
