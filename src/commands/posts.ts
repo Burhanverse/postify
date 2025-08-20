@@ -45,70 +45,33 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       .row();
 
     const caption = d.text || "(empty)";
-    try {
-      if (ctx.session.draftPreviewMessageId) {
-        // edit existing
-        if (d.mediaFileId && d.postType === "photo") {
-          await ctx.api.editMessageCaption(
-            ctx.chat!.id,
-            ctx.session.draftPreviewMessageId,
-            { caption, reply_markup: kb, parse_mode: "HTML" },
-          );
-        } else if (d.mediaFileId && d.postType === "video") {
-          await ctx.api.editMessageCaption(
-            ctx.chat!.id,
-            ctx.session.draftPreviewMessageId,
-            { caption, reply_markup: kb, parse_mode: "HTML" },
-          );
-        } else {
-          await ctx.api.editMessageText(
-            ctx.chat!.id,
-            ctx.session.draftPreviewMessageId,
-            caption,
-            { reply_markup: kb, parse_mode: "HTML" },
-          );
-        }
-      } else {
-        let sent;
-        if (d.mediaFileId && d.postType === "photo") {
-          sent = await ctx.replyWithPhoto(d.mediaFileId, {
-            caption,
-            reply_markup: kb,
-            parse_mode: "HTML",
-          });
-        } else if (d.mediaFileId && d.postType === "video") {
-          sent = await ctx.replyWithVideo(d.mediaFileId, {
-            caption,
-            reply_markup: kb,
-            parse_mode: "HTML",
-          });
-        } else {
-          sent = await ctx.reply(caption, { reply_markup: kb, parse_mode: "HTML" });
-        }
-        ctx.session.draftPreviewMessageId = sent.message_id;
+    const existingId = ctx.session.controlMessageId || ctx.session.draftPreviewMessageId;
+    const sendOrEdit = async () => {
+      if (existingId) {
+        try {
+          if (d.mediaFileId && (d.postType === 'photo' || d.postType === 'video')) {
+            await ctx.api.editMessageCaption(ctx.chat!.id, existingId, { caption, reply_markup: kb, parse_mode: 'HTML' });
+          } else {
+            await ctx.api.editMessageText(ctx.chat!.id, existingId, caption, { reply_markup: kb, parse_mode: 'HTML' });
+          }
+          ctx.session.draftPreviewMessageId = existingId;
+          ctx.session.controlMessageId = existingId;
+          return;
+        } catch {}
       }
-    } catch (err) {
-      // fallback: re-send if edit failed due to type switch
-      try {
-        let sent;
-        if (d.mediaFileId && d.postType === "photo") {
-          sent = await ctx.replyWithPhoto(d.mediaFileId, {
-            caption,
-            reply_markup: kb,
-            parse_mode: "HTML",
-          });
-        } else if (d.mediaFileId && d.postType === "video") {
-          sent = await ctx.replyWithVideo(d.mediaFileId, {
-            caption,
-            reply_markup: kb,
-            parse_mode: "HTML",
-          });
-        } else {
-          sent = await ctx.reply(caption, { reply_markup: kb, parse_mode: "HTML" });
-        }
-        ctx.session.draftPreviewMessageId = sent.message_id;
-      } catch {}
-    }
+      // Need to send new
+      let sent;
+      if (d.mediaFileId && d.postType === 'photo') {
+        sent = await ctx.replyWithPhoto(d.mediaFileId, { caption, reply_markup: kb, parse_mode: 'HTML' });
+      } else if (d.mediaFileId && d.postType === 'video') {
+        sent = await ctx.replyWithVideo(d.mediaFileId, { caption, reply_markup: kb, parse_mode: 'HTML' });
+      } else {
+        sent = await ctx.reply(caption, { reply_markup: kb, parse_mode: 'HTML' });
+      }
+      ctx.session.draftPreviewMessageId = sent.message_id;
+      ctx.session.controlMessageId = sent.message_id;
+    };
+    await sendOrEdit();
   }
 
   bot.command("usechannel", async (ctx) => {

@@ -44,6 +44,8 @@ export interface SessionData {
     | "cron"
     | null;
   waitingForScheduleInput?: boolean; // true when user is entering custom scheduling time
+  controlMessageId?: number; // reusable main UI message id
+  scheduleMessageId?: number; // scheduling submenu message id
 }
 
 function initial(): SessionData {

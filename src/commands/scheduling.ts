@@ -6,6 +6,19 @@ import { PostModel } from "../models/Post";
 import { UserModel, User } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
+// Helper to ensure only one scheduling UI message exists (edit if possible, else send new)
+async function upsertScheduleMessage(ctx: BotContext, text: string, keyboard?: InlineKeyboard) {
+  const id = ctx.session.scheduleMessageId;
+  if (id) {
+    try {
+      await ctx.api.editMessageText(ctx.chat!.id, id, text, { reply_markup: keyboard, parse_mode: 'Markdown' });
+      return id;
+    } catch {}
+  }
+  const sent = await ctx.reply(text, { reply_markup: keyboard, parse_mode: 'Markdown' });
+  ctx.session.scheduleMessageId = sent.message_id;
+  return sent.message_id;
+}
 
 /**
  * Enhanced schedule command handler with improved validation and user experience
@@ -191,12 +204,8 @@ async function showSchedulingOptions(ctx: BotContext): Promise<void> {
     .row()
     .text("❌ Cancel", "schedule_cancel");
 
-  await ctx.reply(
-    `⏰ **Schedule Post**\n\n` +
-    `Current Timezone: **${userTz}**\n` +
-    `Select a preset below or choose Custom / Timezone.`,
-    { reply_markup: keyboard, parse_mode: 'Markdown' }
-  );
+  const text = `⏰ **Schedule Post**\n\nCurrent Timezone: **${userTz}**\nSelect a preset below or choose Custom / Timezone.`;
+  await upsertScheduleMessage(ctx, text, keyboard);
 }
 
 // Timezone selection submenu (paged minimal list of common timezones)
@@ -293,23 +302,14 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
         .text("❌ Cancel", "schedule_cancel")
         .row()
         .text("🌐 Timezone", "schedule_tz_menu");
-      await ctx.editMessageText(
-        `🕐 **Custom Time**\n\n`+
-        `Current Timezone: **${tz}**\n\n`+
-        `Send a time in one of these formats:\n`+
-        `• in 15m / in 2h / in 3d\n`+
-        `• 14:30 (today or tomorrow)\n`+
-        `• tomorrow 09:00\n`+
-        `• 2025-12-25 14:30\n`+
-        `• next monday 10:00\n\n`+
-        `Minimum 1 minute, Maximum 6 months.`,
-        { reply_markup: customKeyboard, parse_mode: 'Markdown' }
-      );
+  const customText = `🕐 **Custom Time**\n\nCurrent Timezone: **${tz}**\n\nSend a time (examples):\n• in 15m / in 2h / in 3d\n• 14:30 (today or tomorrow)\n• tomorrow 09:00\n• 2025-12-25 14:30\n• next monday 10:00\n\nMinimum 1 minute, Maximum 6 months.`;
+  await upsertScheduleMessage(ctx, customText, customKeyboard);
       break; }
 
     case 'schedule_tz_menu': {
       await ctx.answerCallbackQuery();
-      await ctx.editMessageText('🌐 **Select Timezone**\n\nChoose one of the common timezones below. More will be added later.', { reply_markup: timezoneKeyboard(0), parse_mode: 'Markdown' });
+  const tzText = '🌐 **Select Timezone**\n\nChoose one of the common timezones below. More will be added later.';
+  await upsertScheduleMessage(ctx, tzText, timezoneKeyboard(0));
       break; }
 
     case 'schedule_tz_page': {
@@ -330,7 +330,8 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
           .text("❌ Cancel", "schedule_cancel")
           .row()
             .text("🌐 Timezone", "schedule_tz_menu");
-        await ctx.editMessageText(`🕐 **Custom Time**\n\nUpdated Timezone: **${value}**\n\nEnter your desired time.`, { reply_markup: customKeyboard, parse_mode: 'Markdown' });
+        const backText = `🕐 **Custom Time**\n\nUpdated Timezone: **${value}**\n\nEnter your desired time.`;
+  await upsertScheduleMessage(ctx, backText, customKeyboard);
       } else {
         await showSchedulingOptions(ctx);
       }
