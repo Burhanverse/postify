@@ -9,6 +9,7 @@ const EnvSchema = z.object({
   DB_NAME: z.string().min(1).default("postify"),
   APP_BASE_URL: z.string().url().optional(),
   LOG_LEVEL: z.string().default("info"),
+  ENCRYPTION_KEY: z.string().min(32).optional(),
   PORT: z
     .string()
     .regex(/^[0-9]+$/)

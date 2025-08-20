@@ -8,12 +8,13 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "clean": "rimraf dist",
     "build": "npm run clean && tsc -p tsconfig.json && node post-build.mjs",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-    "test": "vitest run"
+  "test": "vitest run",
+  "migrate:encrypt-tokens": "tsx scripts/migrateEncryptUserBotTokens.ts"
   },
   "dependencies": {
     "@grammyjs/menu": "^1.2.1",

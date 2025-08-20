@@ -1,9 +1,11 @@
 import { PostModel, Post } from "../models/Post";
 import { Types } from "mongoose";
 import { logger } from "../utils/logger";
-import { bot } from "../telegram/bot";
+import { bot } from "../telegram/bot"; // main management bot (not used for publishing now)
 import { InlineKeyboard } from "grammy";
 import { ChannelModel } from "../models/Channel";
+import { UserBotModel } from "../models/UserBot";
+import { getOrCreateUserBot } from "./userBotRegistry";
 
 export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   const channel = await ChannelModel.findById(post.channel);
@@ -18,29 +20,36 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     "Publishing post to channel",
   );
 
-  // Validate bot is still in the channel and has permissions
+  if (!channel.botId) {
+    logger.error({ channelId: channel._id }, "Channel missing botId – blocked");
+    throw new Error(
+      "Channel not bound to personal bot. Relink via personal bot /addchannel.",
+    );
+  }
+
+  const userBotRecord = await UserBotModel.findOne({
+    botId: channel.botId,
+    status: "active",
+  });
+  if (!userBotRecord) {
+    throw new Error("Personal bot inactive or missing.");
+  }
+
   try {
-    const me = await bot.api.getMe();
-    const botMember = await bot.api.getChatMember(chatId, me.id);
+    const personalBot = await getOrCreateUserBot(userBotRecord.botId);
+    const botMember = await personalBot.api.getChatMember(
+      chatId,
+      userBotRecord.botId,
+    );
     const canPost =
       botMember.status === "administrator" || botMember.status === "creator";
-
-    if (!canPost) {
-      throw new Error("Bot doesn't have permission to post in this channel");
-    }
+    if (!canPost) throw new Error("Personal bot lacks posting rights");
   } catch (err) {
-    if (err instanceof Error) {
-      if (err.message.includes("chat not found")) {
-        throw new Error(
-          "Channel not found. The bot may have been removed from the channel.",
-        );
-      } else if (err.message.includes("not enough rights")) {
-        throw new Error(
-          "Bot doesn't have permission to access channel information",
-        );
-      }
-    }
-    throw err;
+    logger.warn(
+      { err, chatId, botId: userBotRecord.botId },
+      "Failed permission check for personal bot",
+    );
+    throw err instanceof Error ? err : new Error("Permission check failed");
   }
 
   const keyboard = new InlineKeyboard();
@@ -69,18 +78,23 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
 
   let sent;
   try {
+    const personalBot = await getOrCreateUserBot(channel.botId);
     if (post.type === "photo" && post.mediaFileId) {
-      sent = await bot.api.sendPhoto(chatId, post.mediaFileId, {
+      sent = await personalBot.api.sendPhoto(chatId, post.mediaFileId, {
         caption: post.text || undefined,
         ...sendOptions,
       });
     } else if (post.type === "video" && post.mediaFileId) {
-      sent = await bot.api.sendVideo(chatId, post.mediaFileId, {
+      sent = await personalBot.api.sendVideo(chatId, post.mediaFileId, {
         caption: post.text || undefined,
         ...sendOptions,
       });
     } else {
-      sent = await bot.api.sendMessage(chatId, post.text || "", sendOptions);
+      sent = await personalBot.api.sendMessage(
+        chatId,
+        post.text || "",
+        sendOptions,
+      );
     }
   } catch (err) {
     logger.error(

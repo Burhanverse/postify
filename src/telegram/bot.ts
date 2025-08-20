@@ -3,10 +3,7 @@ import { env } from "../config/env";
 import { registerCoreCommands } from "../commands/core";
 import { registerPostCommands } from "../commands/posts";
 import { registerAdminCommands } from "../commands/admins";
-import {
-  registerChannelsCommands,
-  handleChannelCallback,
-} from "../commands/channels";
+import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
 
 // Import all middleware
 import { userMiddleware } from "../middleware/user";
@@ -42,6 +39,7 @@ export interface SessionData {
   waitingForScheduleInput?: boolean; // true when user is entering custom scheduling time
   controlMessageId?: number; // reusable main UI message id
   scheduleMessageId?: number; // scheduling submenu message id
+  awaitingBotToken?: boolean; // waiting for user to send personal bot token
 }
 
 function initial(): SessionData {
@@ -65,7 +63,7 @@ bot.use(sessionCleanupMiddleware); // Session cleanup (last)
 registerCoreCommands(bot);
 registerPostCommands(bot);
 registerAdminCommands(bot);
-registerChannelsCommands(bot);
+registerChannelsCommands(bot, { enableLinking: false });
 
 // Callback dispatcher (channel UI & generic buttons disabled counters)
 bot.on("callback_query:data", async (ctx) => {

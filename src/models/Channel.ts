@@ -14,6 +14,7 @@ const ChannelSchema = new Schema(
       canEdit: Boolean,
       canDelete: Boolean,
     },
+    botId: { type: Number, index: true }, // personal bot responsible for posting
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },

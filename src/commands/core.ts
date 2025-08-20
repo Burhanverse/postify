@@ -2,207 +2,151 @@ import { Bot } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 import { ChannelModel } from "../models/Channel";
+import { UserBotModel } from "../models/UserBot";
+import { getOrCreateUserBot } from "../services/userBotRegistry";
+import { encrypt } from "../utils/crypto";
+import { validateBotTokenFormat } from "../utils/tokens";
 
 export function registerCoreCommands(bot: Bot<BotContext>) {
   bot.command("start", async (ctx) => {
     await ctx.reply(
-      "Welcome to Postify Bot! Use /addchannel to connect a channel.",
+      "Welcome to Postify Bot! Use /addbot to register your personal bot, then add it as admin to your channels.",
     );
   });
 
   bot.command("help", async (ctx) => {
     await ctx.reply(
       "📝 **COMMANDS**\n" +
-        "/addchannel - connect a channel\n" +
-        "/channels - list your channels\n" +
-        "/usechannel <chatId> - set active channel (affects /admins, /addadmin, /rmadmin, /queue)\n" +
-        "/checkchannels - verify bot posting permissions for all linked channels\n" +
-        "/newpost - create a draft (with Send Now option)\n" +
-        "/addbutton - add a button to draft\n" +
-        "/preview - preview current draft\n" +
-        "/schedule [in <min>|ISO] - schedule draft\n" +
-        "/queue - list scheduled posts\n" +
-        "/listposts - list all posts\n" +
-        "/admins - list admins\n" +
-        "/addadmin <id> <roles> - add/update admin\n" +
-        "/rmadmin <id> - remove admin\n\n" +
-        "✨ **TEXT FORMATTING**\n" +
-        "<b>bold text</b>\n" +
-        "<i>italic text</i>\n" +
-        "<code>inline code</code>\n" +
-        "<pre>code block</pre>\n" +
-        "<blockquote>quoted text</blockquote>",
+        "/addbot - register your personal bot token\n" +
+        "/mybot - view your personal bot status\n" +
+        "/channels - list your channels (read-only here)\n" +
+        "/checkchannels - verify personal bot posting permissions\n" +
+        "(Channel linking & posting happens via your personal bot instance)\n",
       { parse_mode: "Markdown" },
     );
   });
 
   bot.command("addchannel", async (ctx) => {
     await ctx.reply(
-      "Send @username of a public channel or forward **any** message from the private channel where the bot is added as admin.",
-      { parse_mode: "Markdown" },
+      "❌ Channel linking moved to your personal bot. Use /addbot first, then open your personal bot and run /addchannel there.",
     );
-    ctx.session.awaitingChannelRef = true;
+  });
+
+  bot.command("addbot", async (ctx) => {
+    ctx.session.awaitingBotToken = true;
+    await ctx.reply(
+      "Send your bot token (from BotFather). It should look like: 123456789:AA... (never share it with anyone else).",
+    );
+  });
+
+  bot.command("mybot", async (ctx) => {
+    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+    if (!ub) {
+      await ctx.reply("No personal bot configured. Use /addbot to add one.");
+      return;
+    }
+    await ctx.reply(
+      `🤖 Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`,
+    );
   });
 
   bot.on("message", async (ctx, next) => {
-    if (!ctx.session.awaitingChannelRef) return next();
-
-    const msg = ctx.message;
-    let chatId: number | undefined;
-    let username: string | undefined;
-    let title: string | undefined;
-    let type: string | undefined;
-    let inviteLink: string | undefined;
-
-    interface ForwardedChannelRef {
-      id: number;
-      username?: string;
-      title?: string;
-      type: string;
-    }
-    const fwdChat = (msg as { forward_from_chat?: ForwardedChannelRef })
-      .forward_from_chat;
-    if (fwdChat) {
-      const ch = fwdChat;
-      chatId = ch.id;
-      username = ch.username || undefined;
-      title = ch.title || undefined;
-      type = ch.type;
-    } else if (msg.text && /^@\w{4,}$/.test(msg.text.trim())) {
-      username = msg.text.trim().slice(1);
-      try {
-        const chat = await ctx.api.getChat("@" + username);
-        chatId = chat.id;
-        const chatShape = chat as { id: number; type: string; title?: string };
-        title = chatShape.title;
-        type = chat.type;
-        if ((chat as { type: string }).type === "channel") {
-        }
-      } catch (err) {
-        logger.warn({ 
-          error: err instanceof Error ? err.message : String(err),
-          username,
-          userId: ctx.from?.id 
-        }, "Failed to get chat information");
-        await ctx.reply(
-          "Cannot access that channel. Ensure the bot was added as admin.",
-        );
+    if (ctx.session.awaitingBotToken && ctx.message?.text) {
+      const token = ctx.message.text.trim();
+      ctx.session.awaitingBotToken = false;
+      if (!validateBotTokenFormat(token)) {
+        await ctx.reply("❌ Invalid token format. Aborted.");
         return;
       }
-    } else {
-      return next();
-    }
-
-    if (!chatId) {
-      await ctx.reply(
-        "Failed to resolve channel. Try forwarding a message from it.",
-      );
+      try {
+        const tempBot = new Bot(token);
+        const me = await tempBot.api.getMe();
+        if (!me.is_bot) throw new Error("Not a bot account");
+        const existing = await UserBotModel.findOne({ botId: me.id });
+        if (existing && existing.ownerTgId !== ctx.from?.id) {
+          await ctx.reply("❌ This bot is already registered by another user.");
+          return;
+        }
+        const lastFour = token.slice(-4);
+        const encrypted = encrypt(token);
+        const record = await UserBotModel.findOneAndUpdate(
+          { botId: me.id },
+          {
+            $set: {
+              ownerTgId: ctx.from?.id,
+              botId: me.id,
+              username: me.username,
+              tokenEncrypted: encrypted,
+              token: undefined,
+              tokenLastFour: lastFour,
+              status: "active",
+              lastSeenAt: new Date(),
+              lastError: null,
+            },
+          },
+          { upsert: true, new: true },
+        );
+        await ctx.reply(
+          `✅ Personal bot registered: @${record.username}.\nAdd this bot to your channels as admin, then open it and use /addchannel there to link channels. Use /mybot to view status.`,
+        );
+        getOrCreateUserBot(record.botId).catch((err) =>
+          logger.error({ err, botId: record.botId }, "Failed to start user bot"),
+        );
+      } catch (err) {
+        logger.warn({ err }, "Failed to validate bot token");
+        await ctx.reply(
+          "❌ Failed to validate token with Telegram. Make sure it's correct and the bot is not banned.",
+        );
+      }
       return;
     }
-
-    let member;
-    try {
-      member = await ctx.api.getChatMember(chatId, ctx.me.id);
-    } catch (err) {
-      logger.warn({ 
-        error: err instanceof Error ? err.message : String(err),
-        chatId,
-        userId: ctx.from?.id 
-      }, "Failed to check bot permissions in channel");
-      await ctx.reply(
-        "I can't access that channel member list. Add me as admin first.",
-      );
-      return;
-    }
-    const m = member as { can_post_messages?: boolean; status: string };
-    const canPost =
-      m.can_post_messages ??
-      (m.status === "administrator" || m.status === "creator");
-    if (!canPost) {
-      await ctx.reply(
-        "I need permission to post in that channel. Grant posting rights and retry.",
-      );
-      return;
-    }
-
-    await ChannelModel.findOneAndUpdate(
-      { chatId },
-      {
-        $set: {
-          chatId,
-          username,
-          title,
-          type,
-          inviteLink,
-          permissions: { canPost: true, canEdit: true, canDelete: true },
-        },
-        $addToSet: { owners: ctx.from?.id },
-      },
-      { upsert: true },
-    );
-
-    delete ctx.session.awaitingChannelRef;
-    logger.info({ 
-      userId: ctx.from?.id,
-      chatId,
-      title,
-      username,
-      type 
-    }, "Channel linked successfully");
-    await ctx.reply(`Channel linked: ${title || username || chatId}`);
+    return next();
   });
 
   bot.command("checkchannels", async (ctx) => {
     const channels = await ChannelModel.find({ owners: ctx.from?.id });
     if (!channels.length) {
-      await ctx.reply("No channels linked. Use /addchannel to link a channel.");
+      await ctx.reply("No channels linked. (Link them via your personal bot)");
       return;
     }
 
     let response = "🔍 **Channel Status Check:**\n\n";
-    const me = await ctx.api.getMe();
-
     for (const channel of channels) {
+      const channelName =
+        channel.title || channel.username || channel.chatId.toString();
+      if (!channel.botId) {
+        response += `**${channelName}**\nStatus: ❌ Not migrated (no personal bot)\nID: \`${channel.chatId}\`\n\n`;
+        continue;
+      }
       try {
-        const member = await ctx.api.getChatMember(channel.chatId, me.id);
-        const canPost =
-          member.status === "administrator" || member.status === "creator";
-
-        const status = canPost ? "✅ Working" : "⚠️ No posting permission";
-        const channelName =
-          channel.title || channel.username || channel.chatId.toString();
-
-        response += `**${channelName}**\n`;
-        response += `Status: ${status}\n`;
-        response += `ID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: ⏳ Pending verification via personal bot\nID: \`${channel.chatId}\`\n\n`;
       } catch (error) {
-        const channelName =
-          channel.title || channel.username || channel.chatId.toString();
-        response += `**${channelName}**\n`;
-        response += `Status: ❌ Bot removed or no access\n`;
-        response += `ID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: ❌ Error\nID: \`${channel.chatId}\`\n\n`;
       }
     }
 
-    response += "💡 *Use /addchannel to re-add problematic channels*";
+    response +=
+      "💡 *Use your personal bot to /addchannel again if status shows Not migrated*";
     await ctx.reply(response, { parse_mode: "Markdown" });
+  });
+
+  bot.command("migratechannels", async (ctx) => {
+    const legacy = await ChannelModel.find({ $or: [{ botId: { $exists: false } }, { botId: null }] });
+    if (!legacy.length) {
+      await ctx.reply("All channels migrated (have botId).\nRelink any problematic ones via personal bot.");
+      return;
+    }
+    const lines = legacy.slice(0, 25).map(c => `• ${c.title || c.username || c.chatId} (chatId=${c.chatId})`);
+    await ctx.reply(`Legacy channels (need relink via personal bot):\n${lines.join("\n")}`);
   });
 
   bot.api
     .setMyCommands([
-      { command: "addchannel", description: "Connect a channel" },
-      { command: "newpost", description: "Create a draft" },
+      { command: "addbot", description: "Register personal bot" },
+      { command: "mybot", description: "Show personal bot status" },
       { command: "channels", description: "List connected channels" },
-      { command: "addbutton", description: "Add button to draft" },
-      { command: "preview", description: "Preview draft" },
-      { command: "schedule", description: "Schedule last draft" },
-      { command: "queue", description: "List scheduled posts" },
-      { command: "listposts", description: "List all posts" },
-      { command: "usechannel", description: "Select active channel (admin ops)" },
       { command: "checkchannels", description: "Verify channel permissions" },
-      { command: "admins", description: "Manage channel admins" },
-      { command: "addadmin", description: "Grant roles to user" },
-      { command: "rmadmin", description: "Remove admin user" },
+      { command: "migratechannels", description: "List legacy channels" },
     ])
     .catch((err) => logger.error({ err }, "setMyCommands failed"));
 }

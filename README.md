@@ -17,7 +17,32 @@ A Telegram channel management & scheduling bot (Controller Bot alternative) buil
 | Inline buttons (no counters)          | Implemented             |
 | Role-based multi-admin                | Basic (list/add/remove) |
 | Group Topic Support                   | Planned                 |
-| Link custom bot (like controllerbot)  | Planned                 |
+| Link custom bot (like controllerbot)  | Implemented (per-user)  |
+
+## Personal Bot Architecture (Security Hardening)
+
+Each user supplies their own BotFather token. Postify's main bot is now a management & analytics layer only; all channel posting occurs through a per‑user personal bot instance.
+
+Flow:
+
+1. In the main bot: `/addbot` and send your token.
+2. Add your personal bot as admin to desired channels.
+3. Open the personal bot chat and run `/addchannel` to securely link each channel (stores `botId`).
+4. Draft & schedule via either main bot (management) or personal bot; publish step uses personal bot token.
+
+Legacy channels without `botId` will not publish; list them with `/migratechannels` and re-link via personal bot.
+
+Encryption: Provide `ENCRYPTION_KEY` (32‑byte hex or base64). Tokens are stored with AES‑256‑GCM in `tokenEncrypted`. Run migration script once after upgrading:
+
+Run the migration (uses `tsx`):
+
+```
+npm run migrate:encrypt-tokens
+# or
+pnpm migrate:encrypt-tokens
+```
+
+If `ENCRYPTION_KEY` is absent, an ephemeral key is used (NOT for production) and tokens become unreadable after restart.
 
 ## Development
 

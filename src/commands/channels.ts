@@ -1,6 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { ChannelModel } from "../models/Channel";
+import { logger } from "../utils/logger";
 
 export async function getUserChannels(userId?: number) {
   if (!userId) return [];
@@ -24,19 +25,145 @@ function buildChannelsKeyboard(
   return kb;
 }
 
-export function registerChannelsCommands(bot: Bot<BotContext>) {
+interface ChannelCommandOptions { enableLinking?: boolean }
+
+export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelCommandOptions = {}) {
   bot.command("channels", async (ctx) => {
     const uid = ctx.from?.id;
     if (!uid) return;
     const channels = await ChannelModel.find({ owners: uid }).limit(25).lean();
     if (!channels.length) {
-      await ctx.reply("No channels linked. Use /addchannel.");
+      await ctx.reply(
+        opts.enableLinking
+          ? "No channels linked. Use /addchannel."
+          : "No channels linked. Link via your personal bot /addchannel.",
+      );
       return;
     }
     await ctx.reply("Your channels:", {
       reply_markup: buildChannelsKeyboard(channels),
     });
   });
+
+  if (opts.enableLinking) {
+    // Provide /addchannel inside personal bot for secure linking.
+    bot.command("addchannel", async (ctx) => {
+      await ctx.reply(
+        "Send @username of a public channel or forward a message from the private channel where THIS personal bot is admin.",
+      );
+      ctx.session.awaitingChannelRef = true;
+    });
+
+    bot.on("message", async (ctx, next) => {
+      if (!ctx.session.awaitingChannelRef) return next();
+      const msg = ctx.message;
+      let chatId: number | undefined;
+      let username: string | undefined;
+      let title: string | undefined;
+      let type: string | undefined;
+      let inviteLink: string | undefined;
+
+      interface ForwardedChannelRef {
+        id: number;
+        username?: string;
+        title?: string;
+        type: string;
+      }
+      const fwdChat = (msg as { forward_from_chat?: ForwardedChannelRef })
+        .forward_from_chat;
+      if (fwdChat) {
+        const ch = fwdChat;
+        chatId = ch.id;
+        username = ch.username || undefined;
+        title = ch.title || undefined;
+        type = ch.type;
+      } else if (msg.text && /^@\w{4,}$/.test(msg.text.trim())) {
+        username = msg.text.trim().slice(1);
+        try {
+          const chat = await ctx.api.getChat("@" + username);
+          chatId = chat.id;
+          const chatShape = chat as { id: number; type: string; title?: string };
+          title = chatShape.title;
+          type = chat.type;
+        } catch (err) {
+          logger.warn({
+            error: err instanceof Error ? err.message : String(err),
+            username,
+            userId: ctx.from?.id,
+          }, "Failed to get chat info via personal bot");
+          await ctx.reply(
+            "Cannot access that channel. Ensure this personal bot was added as admin.",
+          );
+          return;
+        }
+      } else {
+        return next();
+      }
+
+      if (!chatId) {
+        await ctx.reply("Failed to resolve channel. Try forwarding a message.");
+        return;
+      }
+
+      let member;
+      try {
+        member = await ctx.api.getChatMember(chatId, ctx.me.id);
+      } catch (err) {
+        logger.warn({
+          error: err instanceof Error ? err.message : String(err),
+          chatId,
+          userId: ctx.from?.id,
+        }, "Failed to check personal bot membership");
+        await ctx.reply(
+          "I can't access that channel member list. Add this personal bot as admin first.",
+        );
+        return;
+      }
+      const m = member as { can_post_messages?: boolean; status: string };
+      const canPost =
+        m.can_post_messages ??
+        (m.status === "administrator" || m.status === "creator");
+      if (!canPost) {
+        await ctx.reply(
+          "I need permission to post in that channel. Grant posting rights and retry.",
+        );
+        return;
+      }
+
+      await ChannelModel.findOneAndUpdate(
+        { chatId },
+        {
+          $set: {
+            chatId,
+            username,
+            title,
+            type,
+            inviteLink,
+            permissions: { canPost: true, canEdit: true, canDelete: true },
+            botId: ctx.me.id,
+          },
+          $addToSet: { owners: ctx.from?.id },
+        },
+        { upsert: true },
+      );
+
+      delete ctx.session.awaitingChannelRef;
+      logger.info(
+        {
+          userId: ctx.from?.id,
+            chatId,
+            title,
+            username,
+            type,
+            botId: ctx.me.id,
+        },
+        "Channel linked via personal bot",
+      );
+      await ctx.reply(
+        `Channel linked to personal bot: ${title || username || chatId}`,
+      );
+    });
+  }
 }
 
 export async function handleChannelCallback(ctx: BotContext) {
