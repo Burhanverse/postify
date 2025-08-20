@@ -7,6 +7,15 @@ import { schedulePost, scheduleRecurring } from "../services/agenda";
 import { formatToHtml } from "../utils/format";
 import { DateTime } from "luxon";
 import { Types } from "mongoose";
+import { requireSelectedChannel, requirePostPermission } from "../middleware/auth";
+import { 
+  safeCommandExecution, 
+  safeDraftOperation, 
+  wrapCommand, 
+  validateChannelAccess 
+} from "../utils/commandHelpers";
+import { clearDraftSession } from "../middleware/sessionCleanup";
+import { logUserActivity } from "../middleware/logging";
 
 type DraftButton = { text: string; url?: string; callbackData?: string };
 
@@ -683,34 +692,55 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     return next();
   });
 
-  bot.command("schedule", async (ctx) => {
-    if (!ctx.session.draft) return ctx.reply("No draft. /newpost first.");
-    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId)
-      return ctx.reply("Draft empty. Add text or media.");
-    
-    if (!ctx.session.selectedChannelChatId) {
-      return ctx.reply("No channel selected. Use /newpost to select a channel first.");
+  // Protected command with middleware
+  bot.command("schedule", requireSelectedChannel(), requirePostPermission(), wrapCommand(async (ctx) => {
+    if (!ctx.session.draft) {
+      await ctx.reply("No draft. Create one first with /newpost");
+      return;
     }
     
-    const args = ctx.match?.trim();
+    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId) {
+      await ctx.reply("Draft is empty. Add text or media content.");
+      return;
+    }
+    
+    const channelChatId = ctx.session.selectedChannelChatId!;
+    const args = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    
+    // Parse scheduling time
     let minutes = 2;
     let date: Date | undefined;
+    
     if (args) {
-      // parse "in <minutes>" or ISO date
       if (/^in \d+$/i.test(args)) {
         minutes = Number(args.split(/\s+/)[1]);
+        if (minutes < 1 || minutes > 10080) { // Max 1 week
+          await ctx.reply("❌ Invalid time. Use 1-10080 minutes (max 1 week).");
+          return;
+        }
       } else if (!isNaN(Date.parse(args))) {
         date = new Date(args);
+        if (date <= new Date()) {
+          await ctx.reply("❌ Scheduled time must be in the future.");
+          return;
+        }
+      } else {
+        await ctx.reply("❌ Invalid time format. Use 'in <minutes>' or ISO date string.");
+        return;
       }
     }
+    
     const when = date || DateTime.utc().plus({ minutes }).toJSDate();
     
     const channel = await ChannelModel.findOne({
-      chatId: ctx.session.selectedChannelChatId,
+      chatId: channelChatId,
       owners: ctx.from?.id,
     });
     
-    if (!channel) return ctx.reply("Selected channel not found. Use /newpost to select a valid channel.");
+    if (!channel) {
+      await ctx.reply("❌ Selected channel not found. Please select a valid channel.");
+      return;
+    }
     
     const post = await PostModel.create({
       channel: channel._id,
@@ -723,28 +753,55 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       buttons: ctx.session.draft.buttons,
       scheduledAt: when,
     });
-    await schedulePost((post._id as unknown as string).toString(), when, "UTC");
-    delete ctx.session.draft;
-    await ctx.reply(`Post scheduled for ${when.toISOString()} in channel: ${channel.title || channel.username || channel.chatId}`);
-  });
-
-  bot.command("recurring", async (ctx) => {
-    const args = ctx.match?.trim();
-    if (!args) return ctx.reply("Usage: /recurring <cron> (UTC)");
-    if (!ctx.session.draft) return ctx.reply("Create a draft first.");
-    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId)
-      return ctx.reply("Draft empty. Add text or media.");
     
-    if (!ctx.session.selectedChannelChatId) {
-      return ctx.reply("No channel selected. Use /newpost to select a channel first.");
+    await schedulePost((post._id as unknown as string).toString(), when, "UTC");
+    
+    logUserActivity(ctx.from?.id!, "post_scheduled", {
+      postId: post._id.toString(),
+      channelId: channel._id.toString(),
+      scheduledAt: when.toISOString()
+    });
+    
+    clearDraftSession(ctx);
+    await ctx.reply(`✅ Post scheduled for ${when.toISOString()} in channel: ${channel.title || channel.username || channel.chatId}`);
+  }, "schedule"));
+
+  // Protected command with middleware
+  bot.command("recurring", requireSelectedChannel(), requirePostPermission(), wrapCommand(async (ctx) => {
+    const args = typeof ctx.match === 'string' ? ctx.match.trim() : '';
+    if (!args) {
+      await ctx.reply("Usage: /recurring <cron> (UTC)\nExample: /recurring '0 9 * * *' (daily at 9 AM)");
+      return;
+    }
+    
+    if (!ctx.session.draft) {
+      await ctx.reply("Create a draft first with /newpost");
+      return;
+    }
+    
+    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId) {
+      await ctx.reply("Draft is empty. Add text or media content.");
+      return;
+    }
+    
+    const channelChatId = ctx.session.selectedChannelChatId!;
+    
+    // Validate cron expression (basic validation)
+    const cronParts = args.split(' ');
+    if (cronParts.length !== 5) {
+      await ctx.reply("❌ Invalid cron format. Use 5 parts: minute hour day month weekday\nExample: '0 9 * * *' for daily at 9 AM");
+      return;
     }
     
     const channel = await ChannelModel.findOne({
-      chatId: ctx.session.selectedChannelChatId,
+      chatId: channelChatId,
       owners: ctx.from?.id,
     });
     
-    if (!channel) return ctx.reply("Selected channel not found. Use /newpost to select a valid channel.");
+    if (!channel) {
+      await ctx.reply("❌ Selected channel not found. Please select a valid channel.");
+      return;
+    }
     
     const post = await PostModel.create({
       channel: channel._id,
@@ -757,14 +814,22 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       buttons: ctx.session.draft.buttons,
       recurrence: { cron: args, timezone: "UTC" },
     });
+    
     await scheduleRecurring(
       (post._id as unknown as string).toString(),
       args,
       "UTC",
     );
-    delete ctx.session.draft;
-    await ctx.reply(`Recurring post scheduled with cron: ${args} for channel: ${channel.title || channel.username || channel.chatId}`);
-  });
+    
+    logUserActivity(ctx.from?.id!, "recurring_post_created", {
+      postId: post._id.toString(),
+      channelId: channel._id.toString(),
+      cron: args
+    });
+    
+    clearDraftSession(ctx);
+    await ctx.reply(`✅ Recurring post scheduled with cron: ${args} for channel: ${channel.title || channel.username || channel.chatId}`);
+  }, "recurring"));
 
   bot.command("queue", async (ctx) => {
     let channel;

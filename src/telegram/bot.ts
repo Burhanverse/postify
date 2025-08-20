@@ -7,7 +7,16 @@ import {
   registerChannelsCommands,
   handleChannelCallback,
 } from "../commands/channels";
+
+// Import all middleware
 import { userMiddleware } from "../middleware/user";
+import { errorHandlerMiddleware } from "../middleware/errorHandler";
+import { rateLimitMiddleware } from "../middleware/rateLimiter";
+import { concurrencyMiddleware } from "../middleware/concurrency";
+import { validationMiddleware } from "../middleware/validation";
+import { loggingMiddleware } from "../middleware/logging";
+import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
+
 import { PostModel } from "../models/Post";
 import { logger } from "../utils/logger";
 
@@ -45,8 +54,15 @@ export type BotContext = Context & SessionFlavor<SessionData>;
 
 export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
-bot.use(session({ initial }));
-bot.use(userMiddleware);
+// Apply middleware in correct order
+bot.use(loggingMiddleware);        // Log all requests
+bot.use(errorHandlerMiddleware);   // Catch and handle all errors
+bot.use(validationMiddleware);     // Validate input
+bot.use(rateLimitMiddleware);      // Rate limiting
+bot.use(concurrencyMiddleware);    // Concurrency control
+bot.use(session({ initial }));    // Session management
+bot.use(userMiddleware);           // User management
+bot.use(sessionCleanupMiddleware); // Session cleanup
 
 registerCoreCommands(bot);
 registerPostCommands(bot);
@@ -60,8 +76,35 @@ bot.on("callback_query:data", async (ctx) => {
   if (await handleChannelCallback(ctx)) return;
 });
 
+// Enhanced error handling
 bot.catch((err) => {
-  logger.error({ err }, "Bot error");
+  const { ctx, error } = err;
+  
+  logger.error({
+    error: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+    userId: ctx?.from?.id,
+    chatId: ctx?.chat?.id,
+    updateType: ctx?.update.message ? 'message' : 
+                ctx?.update.callback_query ? 'callback_query' : 'unknown'
+  }, "Unhandled bot error");
+  
+  // Try to inform user about the error
+  if (ctx) {
+    try {
+      if (ctx.callbackQuery) {
+        ctx.answerCallbackQuery({ 
+          text: "❌ An unexpected error occurred. Please try again.", 
+          show_alert: true 
+        }).catch(() => {}); // Silent fail
+      } else {
+        ctx.reply("❌ An unexpected error occurred. Please try again later.")
+          .catch(() => {}); // Silent fail
+      }
+    } catch {
+      // Silent fail for error messages
+    }
+  }
 });
 
 export function launchBot() {
