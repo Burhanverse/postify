@@ -15,6 +15,12 @@ export async function sessionCleanupMiddleware(
 
 async function cleanupSession(ctx: BotContext) {
   try {
+    // Ensure session exists before cleanup
+    if (!ctx.session) {
+      logger.debug({ userId: ctx.from?.id }, "No session to cleanup");
+      return;
+    }
+
     // Clean up expired draft mode states
     if (ctx.session.draftEditMode && !ctx.session.draft) {
       delete ctx.session.draftEditMode;
@@ -42,6 +48,11 @@ async function cleanupSession(ctx: BotContext) {
 }
 
 function cleanupTemporaryStates(ctx: BotContext) {
+  // Ensure session exists
+  if (!ctx.session) {
+    return;
+  }
+
   // List of temporary session keys that should be cleaned up after certain operations
   const temporaryKeys = [
     'awaitingChannelRef',
@@ -66,6 +77,11 @@ function cleanupTemporaryStates(ctx: BotContext) {
 }
 
 export function clearDraftSession(ctx: BotContext) {
+  if (!ctx.session) {
+    logger.debug({ userId: ctx.from?.id }, "No session to clear draft from");
+    return;
+  }
+
   delete ctx.session.draft;
   delete ctx.session.draftPreviewMessageId;
   delete ctx.session.lastDraftTextMessageId;

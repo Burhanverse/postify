@@ -192,12 +192,12 @@ function getResourceFromContext(ctx: BotContext): string {
   // For draft operations, lock per user
   if (ctx.message?.text?.startsWith('/newpost') || 
       ctx.callbackQuery?.data?.startsWith('draft:') ||
-      ctx.session.draft) {
+      (ctx.session && ctx.session.draft)) {
     return `draft:${userId}`;
   }
 
   // For channel operations, lock per channel
-  if (ctx.session.selectedChannelChatId) {
+  if (ctx.session && ctx.session.selectedChannelChatId) {
     return `channel:${ctx.session.selectedChannelChatId}`;
   }
 

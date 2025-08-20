@@ -79,7 +79,7 @@ function getActionInfo(ctx: BotContext): string {
   
   if (ctx.message?.text) {
     // For draft mode detection
-    if (ctx.session.draftEditMode) {
+    if (ctx.session && ctx.session.draftEditMode) {
       return `draft_input:${ctx.session.draftEditMode}`;
     }
     return 'text_input';

@@ -55,14 +55,14 @@ export type BotContext = Context & SessionFlavor<SessionData>;
 export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
 // Apply middleware in correct order
-bot.use(loggingMiddleware);        // Log all requests
+bot.use(loggingMiddleware);        // Log all requests (first for tracking)
 bot.use(errorHandlerMiddleware);   // Catch and handle all errors
+bot.use(session({ initial }));    // Session management (early, before others need it)
 bot.use(validationMiddleware);     // Validate input
 bot.use(rateLimitMiddleware);      // Rate limiting
 bot.use(concurrencyMiddleware);    // Concurrency control
-bot.use(session({ initial }));    // Session management
 bot.use(userMiddleware);           // User management
-bot.use(sessionCleanupMiddleware); // Session cleanup
+bot.use(sessionCleanupMiddleware); // Session cleanup (last)
 
 registerCoreCommands(bot);
 registerPostCommands(bot);

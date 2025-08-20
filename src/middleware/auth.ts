@@ -29,6 +29,12 @@ export function requireSelectedChannel() {
       return;
     }
 
+    // Ensure session exists
+    if (!ctx.session) {
+      await ctx.reply("❌ Session not initialized. Please try again.");
+      return;
+    }
+
     let channelChatId = ctx.session.selectedChannelChatId;
     
     // If no channel selected, try to get user's first channel
@@ -63,6 +69,12 @@ export function requireChannelAdmin(requiredRoles: string[] = []) {
     const userId = ctx.from?.id;
     if (!userId) {
       await ctx.reply("❌ Authentication required.");
+      return;
+    }
+
+    // Ensure session exists
+    if (!ctx.session) {
+      await ctx.reply("❌ Session not initialized. Please try again.");
       return;
     }
 
@@ -116,6 +128,12 @@ export function requirePostPermission() {
     const userId = ctx.from?.id;
     if (!userId) {
       await ctx.reply("❌ Authentication required.");
+      return;
+    }
+
+    // Ensure session exists
+    if (!ctx.session) {
+      await ctx.reply("❌ Session not initialized. Please try again.");
       return;
     }
 
