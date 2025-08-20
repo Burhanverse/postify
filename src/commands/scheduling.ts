@@ -225,8 +225,8 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
     case 'schedule_cancel':
       await ctx.answerCallbackQuery();
       // Clear any pending scheduling input mode
-      if (ctx.session.draftEditMode === "schedule_time") {
-        ctx.session.draftEditMode = null;
+      if (ctx.session.waitingForScheduleInput) {
+        ctx.session.waitingForScheduleInput = false;
       }
       
       // Return to draft controls
@@ -257,7 +257,7 @@ export async function handleScheduleCallback(ctx: BotContext, action: string, va
 
     case 'schedule_custom':
       await ctx.answerCallbackQuery();
-      ctx.session.draftEditMode = "schedule_time";
+      ctx.session.waitingForScheduleInput = true;
       
       const customKeyboard = new InlineKeyboard()
         .text("⏰ Back to Quick Options", "schedule_options")

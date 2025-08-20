@@ -41,9 +41,9 @@ export interface SessionData {
   draftEditMode?:
     | "text"
     | "button"
-    | "schedule_time"
     | "cron"
     | null;
+  waitingForScheduleInput?: boolean; // true when user is entering custom scheduling time
 }
 
 function initial(): SessionData {

@@ -404,6 +404,47 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (data && await handleScheduleCallback(ctx, data.split(':')[0], data.split(':').slice(1).join(':'))) {
       return;
     }
+
+    // Handle general action callbacks
+    if (data === "new_post" || data === "new_post_quick") {
+      await ctx.answerCallbackQuery();
+      // Clear any existing draft to start fresh
+      ctx.session.draft = { postType: "text", buttons: [] };
+      delete ctx.session.draftPreviewMessageId;
+      delete ctx.session.lastDraftTextMessageId;
+      delete ctx.session.draftSourceMessages;
+      delete ctx.session.initialDraftMessageId;
+      delete ctx.session.selectedChannelChatId;
+      
+      // Trigger new post flow - call the newpost command handler logic
+      const { getUserChannels } = require("./channels");
+      const channels = await getUserChannels(ctx.from?.id);
+      
+      if (!channels || channels.length === 0) {
+        await ctx.editMessageText("❌ **No channels found**\n\nPlease add channels first using /addchannel.", { parse_mode: "Markdown" });
+        return;
+      }
+
+      const keyboard = new InlineKeyboard();
+      channels.forEach((channel) => {
+        const displayName = channel.title || channel.username || channel.chatId;
+        keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
+      });
+      keyboard.text("❌ Cancel", "newpost:cancel");
+
+      await ctx.editMessageText(
+        "📝 **Create New Post**\n\n" +
+        "Select a channel to post to:",
+        { reply_markup: keyboard, parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    if (data === "close_message") {
+      await ctx.answerCallbackQuery();
+      await ctx.deleteMessage();
+      return;
+    }
     
     if (!data?.startsWith("draft:")) return next();
     if (!ctx.session.draft) {
@@ -654,6 +695,20 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
   });
 
+  // Handle custom scheduling input
+  bot.on("message:text", async (ctx, next) => {
+    if (!ctx.session.waitingForScheduleInput) return next();
+    
+    const timeInput = ctx.message.text.trim();
+    
+    // Clear the waiting flag
+    ctx.session.waitingForScheduleInput = false;
+    
+    // Process the scheduling input
+    await handleScheduleCommand(ctx, timeInput);
+    return;
+  });
+
   // Capture button add & scheduling inputs
   bot.on("message:text", async (ctx, next) => {
     if (!ctx.session.draft || !ctx.session.draftEditMode) return next();
@@ -698,10 +753,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         await ctx.reply("❌ **Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`", { parse_mode: "Markdown" });
         return;
       }
-    } else if (mode === "schedule_time") {
-      ctx.session.draftEditMode = null;
-      await handleScheduleCommand(ctx, text);
-      return;
     }
     return next();
   });
