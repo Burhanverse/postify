@@ -79,6 +79,11 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
         if ((chat as { type: string }).type === "channel") {
         }
       } catch (err) {
+        logger.warn({ 
+          error: err instanceof Error ? err.message : String(err),
+          username,
+          userId: ctx.from?.id 
+        }, "Failed to get chat information");
         await ctx.reply(
           "Cannot access that channel. Ensure the bot was added as admin.",
         );
@@ -99,6 +104,11 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     try {
       member = await ctx.api.getChatMember(chatId, ctx.me.id);
     } catch (err) {
+      logger.warn({ 
+        error: err instanceof Error ? err.message : String(err),
+        chatId,
+        userId: ctx.from?.id 
+      }, "Failed to check bot permissions in channel");
       await ctx.reply(
         "I can't access that channel member list. Add me as admin first.",
       );
@@ -124,7 +134,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
           title,
           type,
           inviteLink,
-          permissions: { canPost: true },
+          permissions: { canPost: true, canEdit: true, canDelete: true },
         },
         $addToSet: { owners: ctx.from?.id },
       },
@@ -132,6 +142,13 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     );
 
     delete ctx.session.awaitingChannelRef;
+    logger.info({ 
+      userId: ctx.from?.id,
+      chatId,
+      title,
+      username,
+      type 
+    }, "Channel linked successfully");
     await ctx.reply(`Channel linked: ${title || username || chatId}`);
   });
 

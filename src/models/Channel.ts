@@ -11,6 +11,8 @@ const ChannelSchema = new Schema(
     admins: [{ userId: Number, roles: [String] }], // roles: owner, editor, scheduler, analyst
     permissions: {
       canPost: Boolean,
+      canEdit: Boolean,
+      canDelete: Boolean,
     },
     createdAt: { type: Date, default: Date.now },
   },

@@ -21,6 +21,8 @@ import { clearDraftSession } from "../middleware/sessionCleanup";
 import { logUserActivity } from "../middleware/logging";
 import { handleScheduleCommand, handleScheduleCallback } from "./scheduling";
 import { postScheduler } from "../services/scheduler";
+import { getUserChannels } from "./channels";
+import { logger } from "../utils/logger";
 
 type DraftButton = { text: string; url?: string; callbackData?: string };
 
@@ -124,7 +126,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   bot.command("newpost", async (ctx) => {
     // First, get user's channels
-    const channels = await ChannelModel.find({ owners: ctx.from?.id });
+    const channels = await getUserChannels(ctx.from?.id);
 
     if (!channels.length) {
       await ctx.reply(
@@ -434,7 +436,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.selectedChannelChatId;
 
       // Trigger new post flow - call the newpost command handler logic
-      const { getUserChannels } = require("./channels");
       const channels = await getUserChannels(ctx.from?.id);
 
       if (!channels || channels.length === 0) {
@@ -447,7 +448,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       const keyboard = new InlineKeyboard();
       channels.forEach((channel) => {
-        const displayName = channel.title || channel.username || channel.chatId;
+        const displayName = channel.title || channel.username || channel.chatId.toString();
         keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
       });
       keyboard.text("❌ Cancel", "newpost:cancel");

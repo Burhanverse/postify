@@ -63,7 +63,6 @@ function cleanupTemporaryStates(ctx: BotContext) {
 
   // List of temporary session keys that should be cleaned up after certain operations
   const temporaryKeys = [
-    "awaitingChannelRef",
     "tempMessageId",
     "lastErrorTime",
   ];

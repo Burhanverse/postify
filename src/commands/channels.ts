@@ -2,6 +2,11 @@ import { Bot, InlineKeyboard } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { ChannelModel } from "../models/Channel";
 
+export async function getUserChannels(userId?: number) {
+  if (!userId) return [];
+  return await ChannelModel.find({ owners: userId }).limit(25).lean();
+}
+
 function buildChannelsKeyboard(
   channels: {
     chatId: number;
