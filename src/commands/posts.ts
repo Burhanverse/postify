@@ -16,6 +16,8 @@ import {
 } from "../utils/commandHelpers";
 import { clearDraftSession } from "../middleware/sessionCleanup";
 import { logUserActivity } from "../middleware/logging";
+import { handleScheduleCommand, handleScheduleCallback } from "./scheduling";
+import { postScheduler } from "../services/scheduler";
 
 type DraftButton = { text: string; url?: string; callbackData?: string };
 
@@ -397,6 +399,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       
       return;
     }
+
+    // Handle scheduling callbacks
+    if (data && await handleScheduleCallback(ctx, data.split(':')[0], data.split(':').slice(1).join(':'))) {
+      return;
+    }
     
     if (!data?.startsWith("draft:")) return next();
     if (!ctx.session.draft) {
@@ -528,17 +535,9 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "schedule") {
-      ctx.session.draftEditMode = "schedule_time";
       await ctx.answerCallbackQuery();
-      await ctx.reply(
-        "⏰ **Schedule Post**\n\n" +
-        "Send when you want to schedule this post:\n" +
-        "• `in 30` - Schedule in 30 minutes\n" +
-        "• `in 120` - Schedule in 2 hours (120 minutes)\n" +
-        "• `2025-08-21T10:00:00Z` - Schedule for specific ISO date/time\n\n" +
-        "**Time Range:** 1 minute to 1 week (10,080 minutes)",
-        { parse_mode: "Markdown" }
-      );
+      // Use the new enhanced scheduling interface instead of broken input mode
+      await handleScheduleCommand(ctx);
       return;
     }
     if (action === "preview") {
@@ -701,142 +700,111 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       }
     } else if (mode === "schedule_time") {
       ctx.session.draftEditMode = null;
-      ctx.match = text as unknown as string; // reuse schedule command logic
-      const sched = (
-        bot as unknown as {
-          commands: Map<
-            string,
-            { handler: (c: BotContext) => Promise<unknown> }
-          >;
-        }
-      ).commands.get("schedule");
-      if (sched) await sched.handler(ctx);
+      await handleScheduleCommand(ctx, text);
       return;
     }
     return next();
   });
 
-  // Protected command with middleware
+  // Enhanced schedule command with improved validation and UX
   bot.command("schedule", requireSelectedChannel(), requirePostPermission(), wrapCommand(async (ctx) => {
-    if (!ctx.session.draft) {
-      await ctx.reply("No draft. Create one first with /newpost");
-      return;
-    }
-    
-    if (!ctx.session.draft.text && !ctx.session.draft.mediaFileId) {
-      await ctx.reply("Draft is empty. Add text or media content.");
-      return;
-    }
-    
-    const channelChatId = ctx.session.selectedChannelChatId!;
     const args = typeof ctx.match === 'string' ? ctx.match.trim() : '';
-    
-    // Parse scheduling time
-    let minutes = 2;
-    let date: Date | undefined;
-    
-    if (args) {
-      if (/^in \d+$/i.test(args)) {
-        minutes = Number(args.split(/\s+/)[1]);
-        if (minutes < 1 || minutes > 10080) { // Max 1 week
-          await ctx.reply("❌ Invalid time. Use 1-10080 minutes (max 1 week).");
-          return;
-        }
-      } else if (!isNaN(Date.parse(args))) {
-        date = new Date(args);
-        if (date <= new Date()) {
-          await ctx.reply("❌ Scheduled time must be in the future.");
-          return;
-        }
-      } else {
-        await ctx.reply("❌ Invalid time format. Use 'in <minutes>' or ISO date string.");
-        return;
-      }
-    }
-    
-    const when = date || DateTime.utc().plus({ minutes }).toJSDate();
-    
-    const channel = await ChannelModel.findOne({
-      chatId: channelChatId,
-      owners: ctx.from?.id,
-    });
-    
-    if (!channel) {
-      await ctx.reply("❌ Selected channel not found. Please select a valid channel.");
-      return;
-    }
-    
-    const post = await PostModel.create({
-      channel: channel._id,
-      channelChatId: channel.chatId,
-      authorTgId: ctx.from?.id,
-      status: "scheduled",
-      type: ctx.session.draft.postType || "text",
-      text: ctx.session.draft.text,
-      mediaFileId: ctx.session.draft.mediaFileId,
-      buttons: ctx.session.draft.buttons,
-      scheduledAt: when,
-    });
-    
-    await schedulePost((post._id as unknown as string).toString(), when, "UTC");
-    
-    logUserActivity(ctx.from?.id!, "post_scheduled", {
-      postId: post._id.toString(),
-      channelId: channel._id.toString(),
-      scheduledAt: when.toISOString()
-    });
-    
-    clearDraftSession(ctx);
-    await ctx.reply(`✅ Post scheduled for ${when.toISOString()} in channel: ${channel.title || channel.username || channel.chatId}`);
+    await handleScheduleCommand(ctx, args);
   }, "schedule"));
 
 
 
+  // Enhanced queue command with better UX and pagination
   bot.command("queue", async (ctx) => {
-    let channel;
-    
-    if (ctx.session.selectedChannelChatId) {
-      channel = await ChannelModel.findOne({
-        chatId: ctx.session.selectedChannelChatId,
-        owners: ctx.from?.id,
+    const userId = ctx.from?.id;
+    if (!userId) {
+      await ctx.reply("❌ Authentication required.");
+      return;
+    }
+
+    try {
+      // Get user's selected channel or first available channel
+      let channelId: string | undefined;
+      
+      if (ctx.session?.selectedChannelChatId) {
+        const channel = await ChannelModel.findOne({
+          chatId: ctx.session.selectedChannelChatId,
+          owners: userId,
+        });
+        if (channel) {
+          channelId = channel._id.toString();
+        }
+      }
+
+      if (!channelId) {
+        const channel = await ChannelModel.findOne({ owners: userId });
+        if (!channel) {
+          await ctx.reply("❌ **No channels found**\n\nUse /addchannel to link a channel first.", { parse_mode: "Markdown" });
+          return;
+        }
+        channelId = channel._id.toString();
+      }
+
+      // Get scheduled posts using the enhanced scheduler
+      const result = await postScheduler.getScheduledPosts({
+        userId,
+        channelId,
+        limit: 15,
+        sortBy: 'scheduledAt',
+        sortOrder: 'asc'
       });
-    }
-    
-    if (!channel) {
-      channel = await ChannelModel.findOne({ owners: ctx.from?.id });
-    }
-    
-    if (!channel) {
-      await ctx.reply("No linked channel. Use /addchannel to link a channel first.");
-      return;
-    }
-    
-    const upcoming = await PostModel.find({
-      channel: channel._id,
-      status: "scheduled",
-    })
-      .sort({ scheduledAt: 1 })
-      .limit(10);
+
+      if (result.posts.length === 0) {
+        await ctx.reply("📭 **Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.", { parse_mode: "Markdown" });
+        return;
+      }
+
+      // Build response with enhanced formatting
+      const channel = await ChannelModel.findById(channelId);
+      const channelName = channel?.title || channel?.username || channel?.chatId || 'Unknown';
       
-    if (!upcoming.length) {
-      await ctx.reply(`Queue empty for channel: ${channel.title || channel.username || channel.chatId}`);
-      return;
-    }
-    
-    let response = `📅 **Scheduled Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
-    upcoming.forEach((p, index) => {
-      const timeInfo = p.scheduledAt?.toISOString() || "No time set";
-      
-      const preview = p.text ? 
-        (p.text.length > 50 ? p.text.substring(0, 50) + "..." : p.text) : 
-        "(No text)";
+      let response = `📅 **Scheduled Posts for ${channelName}**\n`;
+      response += `(${result.total} total scheduled)\n\n`;
+
+      result.posts.forEach((post, index) => {
+        const scheduledTime = DateTime.fromJSDate(post.scheduledAt!);
+        const timeDisplay = scheduledTime.toFormat('MMM dd, HH:mm');
+        const relativeTime = scheduledTime.toRelative();
         
-      response += `${index + 1}. **${p._id.toString()}**\n`;
-      response += `   📝 ${preview}\n`;
-      response += `   ⏰ ${timeInfo}\n\n`;
-    });
-    
-    await ctx.reply(response, { parse_mode: "Markdown" });
+        const preview = post.text ? 
+          (post.text.length > 50 ? post.text.substring(0, 50) + "..." : post.text) : 
+          `📸 ${post.type} post`;
+          
+        response += `${index + 1}. **${preview}**\n`;
+        response += `   ⏰ ${timeDisplay} UTC (${relativeTime})\n`;
+        response += `   🆔 \`${post._id.toString()}\`\n\n`;
+      });
+
+      if (result.hasMore) {
+        response += `_Showing first ${result.posts.length} posts. Use pagination for more._`;
+      }
+
+      // Add interactive buttons
+      const keyboard = new InlineKeyboard()
+        .text("🔄 Refresh", "queue_refresh")
+        .text("📊 Stats", "queue_stats")
+        .row()
+        .text("📝 New Post", "new_post_quick")
+        .text("❌ Close", "close_message");
+
+      await ctx.reply(response, { 
+        reply_markup: keyboard, 
+        parse_mode: "Markdown" 
+      });
+
+    } catch (error) {
+      logger.error({
+        error: error instanceof Error ? error.message : String(error),
+        userId
+      }, "Error in enhanced queue command");
+
+      await ctx.reply("❌ **Error loading queue**\n\nPlease try again later.", { parse_mode: "Markdown" });
+    }
   });
 
   bot.command("listposts", async (ctx) => {
