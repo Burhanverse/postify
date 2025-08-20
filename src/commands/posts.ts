@@ -604,39 +604,51 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         delete ctx.session.initialDraftMessageId;
         
         await ctx.answerCallbackQuery();
-        await ctx.editMessageText(`✅ **Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`, { parse_mode: "Markdown" });
+        
+        // Check if the current message has media content
+        const successMessage = `✅ **Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
+        
+        try {
+          // For media messages (photo/video), we can't edit the text, so send a new message
+          if (draft.mediaFileId && (draft.postType === "photo" || draft.postType === "video")) {
+            await ctx.reply(successMessage, { parse_mode: "Markdown" });
+          } else {
+            // For text-only messages, we can edit the message
+            await ctx.editMessageText(successMessage, { parse_mode: "Markdown" });
+          }
+        } catch (editError) {
+          // Fallback: send a new message if editing fails
+          await ctx.reply(successMessage, { parse_mode: "Markdown" });
+        }
       } catch (error) {
         console.error("Send now error:", error);
         await ctx.answerCallbackQuery();
         
         // Try to provide more specific error information
+        const sendErrorMessage = async (message: string) => {
+          try {
+            // For media messages, always send a new message
+            if (draft.mediaFileId && (draft.postType === "photo" || draft.postType === "video")) {
+              await ctx.reply(message, { parse_mode: "Markdown" });
+            } else {
+              await ctx.editMessageText(message, { parse_mode: "Markdown" });
+            }
+          } catch {
+            // Fallback: send new message if editing fails
+            await ctx.reply(message, { parse_mode: "Markdown" });
+          }
+        };
+
         if (error instanceof Error) {
           if (error.message.includes("chat not found")) {
-            // For photo/video messages, we need to send a new message instead of editing
-            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply("❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel", { parse_mode: "Markdown" });
-            } else {
-              await ctx.editMessageText("❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel", { parse_mode: "Markdown" });
-            }
+            await sendErrorMessage("❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel");
           } else if (error.message.includes("not enough rights")) {
-            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply("❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.", { parse_mode: "Markdown" });
-            } else {
-              await ctx.editMessageText("❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.", { parse_mode: "Markdown" });
-            }
+            await sendErrorMessage("❌ **Error: Insufficient permissions**\n\nBot doesn't have permission to post. Grant posting rights to the bot.");
           } else {
-            if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-              await ctx.reply(`❌ **Error occurred**\n\n${error.message}`, { parse_mode: "Markdown" });
-            } else {
-              await ctx.editMessageText(`❌ **Error occurred**\n\n${error.message}`, { parse_mode: "Markdown" });
-            }
+            await sendErrorMessage(`❌ **Error occurred**\n\n${error.message}`);
           }
         } else {
-          if (ctx.session.draftPreviewMessageId && ctx.session.draft?.mediaFileId) {
-            await ctx.reply("❌ **Unknown error occurred**\n\nPlease try again or contact support.", { parse_mode: "Markdown" });
-          } else {
-            await ctx.editMessageText("❌ **Unknown error occurred**\n\nPlease try again or contact support.", { parse_mode: "Markdown" });
-          }
+          await sendErrorMessage("❌ **Unknown error occurred**\n\nPlease try again or contact support.");
         }
       }
       return;
