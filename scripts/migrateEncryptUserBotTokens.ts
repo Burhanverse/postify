@@ -15,8 +15,6 @@ async function run() {
     try {
       if (!rec.token) continue;
       rec.tokenEncrypted = encrypt(rec.token);
-      // Remove plaintext token
-      // @ts-ignore dynamic deletion of legacy field
       delete rec.token;
       await rec.save();
       console.log(`Migrated botId=${rec.botId}`);

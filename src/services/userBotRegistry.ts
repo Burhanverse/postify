@@ -59,6 +59,20 @@ export async function getOrCreateUserBot(botId: number) {
   registerPostCommands(bot);
   registerChannelsCommands(bot, { enableLinking: true });
 
+  // Set bot command menu for personal bot (owner only context)
+  bot.api
+    .setMyCommands([
+      { command: "newpost", description: "Create a new post" },
+      { command: "addchannel", description: "Link a channel to this bot" },
+      { command: "channels", description: "List linked channels" },
+      { command: "mybot", description: "Bot status & info (main bot command)" },
+      { command: "schedule", description: "(Use buttons)" },
+      { command: "cancel", description: "Cancel current draft" },
+    ])
+    .catch((err) => {
+      logger.warn({ err, botId }, "Failed setting personal bot commands");
+    });
+
   bot.catch((err) => {
     const meta = activeBots.get(botId);
     if (meta) meta.failures += 1;

@@ -4,8 +4,6 @@ import { registerCoreCommands } from "../commands/core";
 import { registerPostCommands } from "../commands/posts";
 import { registerAdminCommands } from "../commands/admins";
 import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
-
-// Import all middleware
 import { userMiddleware } from "../middleware/user";
 import { errorHandlerMiddleware } from "../middleware/errorHandler";
 import { rateLimitMiddleware } from "../middleware/rateLimiter";
@@ -13,7 +11,6 @@ import { concurrencyMiddleware } from "../middleware/concurrency";
 import { validationMiddleware } from "../middleware/validation";
 import { loggingMiddleware } from "../middleware/logging";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
-
 import { PostModel } from "../models/Post";
 import { logger } from "../utils/logger";
 
@@ -30,18 +27,18 @@ export interface SessionData {
     }[];
   };
   awaitingChannelRef?: boolean;
-  selectedChannelChatId?: number; // user-selected active channel
-  draftPreviewMessageId?: number; // message id of interactive draft preview
-  lastDraftTextMessageId?: number; // (legacy single id - kept for backward compatibility)
-  draftSourceMessages?: { id: number; html: string }[]; // list of user message ids & formatted html composing draft
-  initialDraftMessageId?: number; // id of first user text message starting the draft
+  selectedChannelChatId?: number;
+  draftPreviewMessageId?: number;
+  lastDraftTextMessageId?: number;
+  draftSourceMessages?: { id: number; html: string }[]; 
+  initialDraftMessageId?: number; 
   draftEditMode?: "text" | "button" | "cron" | null;
-  waitingForScheduleInput?: boolean; // true when user is entering custom scheduling time
-  controlMessageId?: number; // reusable main UI message id
-  scheduleMessageId?: number; // scheduling submenu message id
-  awaitingBotToken?: boolean; // waiting for user to send personal bot token
-  awaitingUnlinkBotConfirm?: boolean; // confirmation flag for unlinkbot
-  draftLocked?: boolean; // when true, ignore further draft text/media/button inputs
+  waitingForScheduleInput?: boolean; 
+  controlMessageId?: number; 
+  scheduleMessageId?: number; 
+  awaitingBotToken?: boolean; 
+  awaitingUnlinkBotConfirm?: boolean; 
+  draftLocked?: boolean; 
 }
 
 function initial(): SessionData {
@@ -53,14 +50,14 @@ export type BotContext = Context & SessionFlavor<SessionData>;
 export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
 // Apply middleware in correct order
-bot.use(loggingMiddleware); // Log all requests (first for tracking)
-bot.use(errorHandlerMiddleware); // Catch and handle all errors
-bot.use(session({ initial })); // Session management (early, before others need it)
-bot.use(validationMiddleware); // Validate input
-bot.use(rateLimitMiddleware); // Rate limiting
-bot.use(concurrencyMiddleware); // Concurrency control
-bot.use(userMiddleware); // User management
-bot.use(sessionCleanupMiddleware); // Session cleanup (last)
+bot.use(loggingMiddleware); 
+bot.use(errorHandlerMiddleware); 
+bot.use(session({ initial })); 
+bot.use(validationMiddleware); 
+bot.use(rateLimitMiddleware); 
+bot.use(concurrencyMiddleware); 
+bot.use(userMiddleware); 
+bot.use(sessionCleanupMiddleware); 
 
 registerCoreCommands(bot);
 registerPostCommands(bot);
@@ -70,7 +67,6 @@ registerChannelsCommands(bot, { enableLinking: false });
 // Callback dispatcher (channel UI & generic buttons disabled counters)
 bot.on("callback_query:data", async (ctx) => {
   const data = ctx.callbackQuery.data;
-  // Channel callbacks
   if (await handleChannelCallback(ctx)) return;
 });
 
@@ -102,14 +98,13 @@ bot.catch((err) => {
             text: "❌ An unexpected error occurred. Please try again.",
             show_alert: true,
           })
-          .catch(() => {}); // Silent fail
+          .catch(() => {}); 
       } else {
         ctx
           .reply("❌ An unexpected error occurred. Please try again later.")
-          .catch(() => {}); // Silent fail
+          .catch(() => {}); 
       }
     } catch {
-      // Silent fail for error messages
     }
   }
 });

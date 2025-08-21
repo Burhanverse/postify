@@ -6,7 +6,6 @@ import { PostModel } from "../models/Post";
 import { UserModel, User } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
-// Helper to ensure only one scheduling UI message exists (edit if possible, else send new)
 async function upsertScheduleMessage(
   ctx: BotContext,
   text: string,
@@ -301,8 +300,7 @@ export async function handleScheduleCallback(
   action: string,
   value: string,
 ): Promise<boolean> {
-  // Recognized actions for this handler
-  const allowed = ["new_post", "cancel_post"]; // removed view_queue per requirement
+  const allowed = ["new_post", "cancel_post"];
   if (!action.startsWith("schedule_") && !allowed.includes(action))
     return false;
 
@@ -316,7 +314,6 @@ export async function handleScheduleCallback(
   switch (action) {
     case "schedule_quick": {
       await ctx.answerCallbackQuery();
-      // Persist last used preset
       await UserModel.findOneAndUpdate(
         { tgId: userId },
         { $set: { "preferences.lastSchedulePreset": value } },
@@ -332,7 +329,6 @@ export async function handleScheduleCallback(
 
     case "schedule_cancel":
       await ctx.answerCallbackQuery();
-      // Clear any pending scheduling input mode
       if (ctx.session.waitingForScheduleInput) {
         ctx.session.waitingForScheduleInput = false;
       }
@@ -407,7 +403,6 @@ export async function handleScheduleCallback(
           { $set: { "preferences.timezone": value } },
         );
       }
-      // Return to previous menu or custom input
       if (ctx.session.waitingForScheduleInput) {
         const customKeyboard = new InlineKeyboard()
           .text("⬅ Presets", "schedule_options")
@@ -457,7 +452,6 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
       userId,
       limit: 10,
     });
-  // Drafts intentionally not fetched (requirement: do not save/show recent drafts in queue)
 
     if (result.posts.length === 0) {
       await ctx.editMessageText(
@@ -497,8 +491,6 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
     if (result.hasMore) {
       message += `_Showing first 10 posts. Use /queue for the full list._\n\n`;
     }
-
-  // Drafts section removed.
 
     const keyboard = new InlineKeyboard().text("❌ Close", "close_message");
 
