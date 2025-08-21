@@ -1,7 +1,7 @@
 import { PostModel, Post } from "../models/Post";
 import { Types } from "mongoose";
 import { logger } from "../utils/logger";
-import { bot } from "../telegram/bot"; // main management bot (not used for publishing now)
+import { bot } from "../telegram/bot";
 import { InlineKeyboard } from "grammy";
 import { ChannelModel } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";

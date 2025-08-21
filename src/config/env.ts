@@ -20,7 +20,7 @@ const EnvSchema = z.object({
     .regex(/^[0-9]+$/)
     .transform((v) => parseInt(v, 10))
     .optional(),
-  RATE_LIMIT_EXEMPT_ACTIONS: z.string().optional(), // comma-separated list
+  RATE_LIMIT_EXEMPT_ACTIONS: z.string().optional(),
   PORT: z
     .string()
     .regex(/^[0-9]+$/)

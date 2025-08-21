@@ -1,6 +1,5 @@
 import { Schema, model, InferSchemaType } from "mongoose";
 
-// User-provided personal bot token (encrypted at rest). Legacy plaintext token kept for migration.
 const UserBotSchema = new Schema(
   {
     ownerTgId: { type: Number, index: true, required: true },

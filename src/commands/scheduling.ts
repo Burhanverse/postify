@@ -177,8 +177,7 @@ export async function handleScheduleCommand(
     }
 
     const keyboard = new InlineKeyboard()
-      .text("📋 View Queue", "view_queue")
-      .text("📝 New Post", "new_post")
+      .text(" New Post", "new_post")
       .row()
       .text("❌ Cancel This Post", `cancel_post:${post._id.toString()}`);
 
@@ -303,7 +302,7 @@ export async function handleScheduleCallback(
   value: string,
 ): Promise<boolean> {
   // Recognized actions for this handler
-  const allowed = ["view_queue", "new_post", "cancel_post"];
+  const allowed = ["new_post", "cancel_post"]; // removed view_queue per requirement
   if (!action.startsWith("schedule_") && !allowed.includes(action))
     return false;
 
@@ -458,15 +457,7 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
       userId,
       limit: 10,
     });
-    // Also fetch recent drafts (unscheduled posts created by user in channels they own)
-    const drafts = await PostModel.find({
-      authorTgId: userId,
-      status: "draft",
-      scheduledAt: { $exists: false },
-    })
-      .sort({ updatedAt: -1 })
-      .limit(5)
-      .lean();
+  // Drafts intentionally not fetched (requirement: do not save/show recent drafts in queue)
 
     if (result.posts.length === 0) {
       await ctx.editMessageText(
@@ -507,17 +498,7 @@ async function showScheduledPosts(ctx: BotContext): Promise<void> {
       message += `_Showing first 10 posts. Use /queue for the full list._\n\n`;
     }
 
-    if (drafts.length) {
-      message += `📝 **Recent Drafts (not scheduled)**\n`;
-      drafts.forEach((d) => {
-        const preview = d.text
-          ? d.text.length > 40
-            ? d.text.substring(0, 40) + "..."
-            : d.text
-          : "(Media draft)";
-        message += `• ${preview}\n`;
-      });
-    }
+  // Drafts section removed.
 
     const keyboard = new InlineKeyboard().text("❌ Close", "close_message");
 
