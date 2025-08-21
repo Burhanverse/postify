@@ -10,6 +10,17 @@ const EnvSchema = z.object({
   APP_BASE_URL: z.string().url().optional(),
   LOG_LEVEL: z.string().default("info"),
   ENCRYPTION_KEY: z.string().min(32).optional(),
+  RATE_LIMIT_MAX_REQUESTS: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .transform((v) => parseInt(v, 10))
+    .optional(),
+  RATE_LIMIT_WINDOW_MS: z
+    .string()
+    .regex(/^[0-9]+$/)
+    .transform((v) => parseInt(v, 10))
+    .optional(),
+  RATE_LIMIT_EXEMPT_ACTIONS: z.string().optional(), // comma-separated list
   PORT: z
     .string()
     .regex(/^[0-9]+$/)
