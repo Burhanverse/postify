@@ -98,9 +98,15 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     };
     try {
       await sendOrEdit();
-      logger.debug({ userId: ctx.from?.id, chatId: ctx.chat?.id }, "Draft preview rendered");
+      logger.debug(
+        { userId: ctx.from?.id, chatId: ctx.chat?.id },
+        "Draft preview rendered",
+      );
     } catch (err) {
-      logger.error({ err, userId: ctx.from?.id, chatId: ctx.chat?.id }, "Failed to render draft preview");
+      logger.error(
+        { err, userId: ctx.from?.id, chatId: ctx.chat?.id },
+        "Failed to render draft preview",
+      );
       const friendly =
         err instanceof Error && /can't parse entities|entity/i.test(err.message)
           ? "❌ Formatting error in your text. Check unclosed <b>, <i>, <code>, <pre>, or <a> tags."
@@ -239,7 +245,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   // Accept photo/video with caption (live preview update)
   bot.on(["message:photo", "message:video"], async (ctx, next) => {
-  if (!ctx.session.draft || ctx.session.draftLocked) return next();
+    if (!ctx.session.draft || ctx.session.draftLocked) return next();
     const msg = ctx.message as Message;
     const hasPhotos = (m: Message): m is Message & { photo: PhotoSize[] } => {
       if (!("photo" in m)) return false;
@@ -293,7 +299,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.on("message:text", async (ctx, next) => {
     // Button building
     // If we're in custom schedule input mode, skip draft text handling; later handler will process
-  if (ctx.session.waitingForScheduleInput || ctx.session.draftLocked) return next();
+    if (ctx.session.waitingForScheduleInput || ctx.session.draftLocked)
+      return next();
     if (
       (ctx.session as Record<string, unknown>).awaitingButton &&
       ctx.session.draft
@@ -355,7 +362,12 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   // Handle edited text messages for drafts
   bot.on("edited_message:text", async (ctx, next) => {
-  if (!ctx.session.draft || !ctx.session.initialDraftMessageId || ctx.session.draftLocked) return next();
+    if (
+      !ctx.session.draft ||
+      !ctx.session.initialDraftMessageId ||
+      ctx.session.draftLocked
+    )
+      return next();
     if (ctx.editedMessage.message_id === ctx.session.initialDraftMessageId) {
       ctx.session.draft.text = formatToHtml(ctx.editedMessage.text);
       await renderDraftPreview(ctx);
@@ -460,7 +472,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       const keyboard = new InlineKeyboard();
       channels.forEach((channel) => {
-        const displayName = channel.title || channel.username || channel.chatId.toString();
+        const displayName =
+          channel.title || channel.username || channel.chatId.toString();
         keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
       });
       keyboard.text("❌ Cancel", "newpost:cancel");
@@ -499,8 +512,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "send") {
-  // Lock draft so no further content modifications are ingested while user chooses now vs schedule
-  ctx.session.draftLocked = true;
+      // Lock draft so no further content modifications are ingested while user chooses now vs schedule
+      ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
         .text("📤 Now", "draft:sendnow")
         .text("⏰ Schedule", "draft:schedule")
@@ -602,8 +615,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "back") {
       await ctx.answerCallbackQuery();
-  // Unlock draft editing when user returns
-  delete ctx.session.draftLocked;
+      // Unlock draft editing when user returns
+      delete ctx.session.draftLocked;
       await renderDraftPreview(ctx);
       return;
     }
@@ -626,7 +639,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.lastDraftTextMessageId;
       delete ctx.session.draftSourceMessages;
       delete ctx.session.initialDraftMessageId;
-  delete ctx.session.draftLocked;
+      delete ctx.session.draftLocked;
       await ctx.answerCallbackQuery();
       await ctx.reply(
         "❌ **Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.",
@@ -644,7 +657,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.draftPreviewMessageId; // Force new preview message
       await ctx.answerCallbackQuery();
       if (ctx.session.draftLocked) {
-        await ctx.reply("🔒 Draft is locked while sending/scheduling menu is open.", { parse_mode: "Markdown" });
+        await ctx.reply(
+          "🔒 Draft is locked while sending/scheduling menu is open.",
+          { parse_mode: "Markdown" },
+        );
         return;
       }
       await ctx.reply(
@@ -655,7 +671,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "sendnow") {
-  // Keep draft locked during send operation
+      // Keep draft locked during send operation
       // Immediate send without scheduling
       const draft = ctx.session.draft;
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
@@ -703,7 +719,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       // Quick active personal bot record check before creating DB post
       const { UserBotModel } = await import("../models/UserBot");
-      const userBotRecord = await UserBotModel.findOne({ botId: channel.botId, status: "active" });
+      const userBotRecord = await UserBotModel.findOne({
+        botId: channel.botId,
+        status: "active",
+      });
       if (!userBotRecord) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
@@ -745,7 +764,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         delete ctx.session.lastDraftTextMessageId;
         delete ctx.session.draftSourceMessages;
         delete ctx.session.initialDraftMessageId;
-  delete ctx.session.draftLocked;
+        delete ctx.session.draftLocked;
 
         await ctx.answerCallbackQuery();
 
@@ -774,9 +793,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         }
       } catch (error) {
         console.error("Send now error:", error);
-        try { await ctx.answerCallbackQuery(); } catch {}
-  // Unlock to let user adjust after failure
-  delete ctx.session.draftLocked;
+        try {
+          await ctx.answerCallbackQuery();
+        } catch {}
+        // Unlock to let user adjust after failure
+        delete ctx.session.draftLocked;
 
         // Try to provide more specific error information
         const sendErrorMessage = async (message: string) => {

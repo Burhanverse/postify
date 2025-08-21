@@ -33,7 +33,7 @@ describe("addchannel functionality", () => {
   it("should handle public channel username", async () => {
     const usernameText = "@testchannel";
     const usernameRegex = /^@\w{4,}$/;
-    
+
     expect(usernameRegex.test(usernameText)).toBe(true);
     expect(usernameText.slice(1)).toBe("testchannel");
   });
@@ -45,7 +45,7 @@ describe("addchannel functionality", () => {
 
   it("should validate channel permissions structure", () => {
     const permissions = { canPost: true, canEdit: true, canDelete: true };
-    
+
     expect(permissions).toHaveProperty("canPost", true);
     expect(permissions).toHaveProperty("canEdit", true);
     expect(permissions).toHaveProperty("canDelete", true);
@@ -56,21 +56,22 @@ describe("addchannel functionality", () => {
       text: "Hello world",
     };
 
-    const fwdChat = (regularMessage as { forward_from_chat?: unknown }).forward_from_chat;
+    const fwdChat = (regularMessage as { forward_from_chat?: unknown })
+      .forward_from_chat;
     expect(fwdChat).toBeUndefined();
   });
 
   it("should validate username format correctly", () => {
     const validUsernames = ["@testchannel", "@channel123", "@test_channel"];
     const invalidUsernames = ["@ab", "@abc", "testchannel", "@", "@123"];
-    
+
     const usernameRegex = /^@\w{4,}$/;
-    
-    validUsernames.forEach(username => {
+
+    validUsernames.forEach((username) => {
       expect(usernameRegex.test(username)).toBe(true);
     });
-    
-    invalidUsernames.forEach(username => {
+
+    invalidUsernames.forEach((username) => {
       expect(usernameRegex.test(username)).toBe(false);
     });
   });

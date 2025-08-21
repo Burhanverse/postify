@@ -3,7 +3,10 @@ import { env } from "../config/env";
 import { registerCoreCommands } from "../commands/core";
 import { registerPostCommands } from "../commands/posts";
 import { registerAdminCommands } from "../commands/admins";
-import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
+import {
+  registerChannelsCommands,
+  handleChannelCallback,
+} from "../commands/channels";
 import { userMiddleware } from "../middleware/user";
 import { errorHandlerMiddleware } from "../middleware/errorHandler";
 import { rateLimitMiddleware } from "../middleware/rateLimiter";
@@ -30,15 +33,15 @@ export interface SessionData {
   selectedChannelChatId?: number;
   draftPreviewMessageId?: number;
   lastDraftTextMessageId?: number;
-  draftSourceMessages?: { id: number; html: string }[]; 
-  initialDraftMessageId?: number; 
+  draftSourceMessages?: { id: number; html: string }[];
+  initialDraftMessageId?: number;
   draftEditMode?: "text" | "button" | "cron" | null;
-  waitingForScheduleInput?: boolean; 
-  controlMessageId?: number; 
-  scheduleMessageId?: number; 
-  awaitingBotToken?: boolean; 
-  awaitingUnlinkBotConfirm?: boolean; 
-  draftLocked?: boolean; 
+  waitingForScheduleInput?: boolean;
+  controlMessageId?: number;
+  scheduleMessageId?: number;
+  awaitingBotToken?: boolean;
+  awaitingUnlinkBotConfirm?: boolean;
+  draftLocked?: boolean;
 }
 
 function initial(): SessionData {
@@ -50,14 +53,14 @@ export type BotContext = Context & SessionFlavor<SessionData>;
 export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 
 // Apply middleware in correct order
-bot.use(loggingMiddleware); 
-bot.use(errorHandlerMiddleware); 
-bot.use(session({ initial })); 
-bot.use(validationMiddleware); 
-bot.use(rateLimitMiddleware); 
-bot.use(concurrencyMiddleware); 
-bot.use(userMiddleware); 
-bot.use(sessionCleanupMiddleware); 
+bot.use(loggingMiddleware);
+bot.use(errorHandlerMiddleware);
+bot.use(session({ initial }));
+bot.use(validationMiddleware);
+bot.use(rateLimitMiddleware);
+bot.use(concurrencyMiddleware);
+bot.use(userMiddleware);
+bot.use(sessionCleanupMiddleware);
 
 registerCoreCommands(bot);
 registerPostCommands(bot);
@@ -98,14 +101,13 @@ bot.catch((err) => {
             text: "❌ An unexpected error occurred. Please try again.",
             show_alert: true,
           })
-          .catch(() => {}); 
+          .catch(() => {});
       } else {
         ctx
           .reply("❌ An unexpected error occurred. Please try again later.")
-          .catch(() => {}); 
+          .catch(() => {});
       }
-    } catch {
-    }
+    } catch {}
   }
 });
 

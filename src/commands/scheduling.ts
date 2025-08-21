@@ -157,13 +157,13 @@ export async function handleScheduleCommand(
       return;
     }
 
-  // Clear draft session
+    // Clear draft session
     delete ctx.session.draft;
     delete ctx.session.draftPreviewMessageId;
     delete ctx.session.lastDraftTextMessageId;
     delete ctx.session.draftSourceMessages;
     delete ctx.session.initialDraftMessageId;
-  delete ctx.session.draftLocked;
+    delete ctx.session.draftLocked;
 
     // Success message
     let successMessage = `✅ **Post scheduled successfully!**\n\n`;

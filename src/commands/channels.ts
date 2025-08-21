@@ -25,9 +25,14 @@ function buildChannelsKeyboard(
   return kb;
 }
 
-interface ChannelCommandOptions { enableLinking?: boolean }
+interface ChannelCommandOptions {
+  enableLinking?: boolean;
+}
 
-export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelCommandOptions = {}) {
+export function registerChannelsCommands(
+  bot: Bot<BotContext>,
+  opts: ChannelCommandOptions = {},
+) {
   bot.command("channels", async (ctx) => {
     const uid = ctx.from?.id;
     if (!uid) return;
@@ -81,15 +86,22 @@ export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelComm
         try {
           const chat = await ctx.api.getChat("@" + username);
           chatId = chat.id;
-          const chatShape = chat as { id: number; type: string; title?: string };
+          const chatShape = chat as {
+            id: number;
+            type: string;
+            title?: string;
+          };
           title = chatShape.title;
           type = chat.type;
         } catch (err) {
-          logger.warn({
-            error: err instanceof Error ? err.message : String(err),
-            username,
-            userId: ctx.from?.id,
-          }, "Failed to get chat info via personal bot");
+          logger.warn(
+            {
+              error: err instanceof Error ? err.message : String(err),
+              username,
+              userId: ctx.from?.id,
+            },
+            "Failed to get chat info via personal bot",
+          );
           await ctx.reply(
             "Cannot access that channel. Ensure this personal bot was added as admin.",
           );
@@ -108,11 +120,14 @@ export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelComm
       try {
         member = await ctx.api.getChatMember(chatId, ctx.me.id);
       } catch (err) {
-        logger.warn({
-          error: err instanceof Error ? err.message : String(err),
-          chatId,
-          userId: ctx.from?.id,
-        }, "Failed to check personal bot membership");
+        logger.warn(
+          {
+            error: err instanceof Error ? err.message : String(err),
+            chatId,
+            userId: ctx.from?.id,
+          },
+          "Failed to check personal bot membership",
+        );
         await ctx.reply(
           "I can't access that channel member list. Add this personal bot as admin first.",
         );
@@ -150,11 +165,11 @@ export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelComm
       logger.info(
         {
           userId: ctx.from?.id,
-            chatId,
-            title,
-            username,
-            type,
-            botId: ctx.me.id,
+          chatId,
+          title,
+          username,
+          type,
+          botId: ctx.me.id,
         },
         "Channel linked via personal bot",
       );

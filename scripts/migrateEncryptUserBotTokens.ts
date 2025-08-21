@@ -6,11 +6,16 @@ import { env } from "../src/config/env";
 
 async function run() {
   if (!process.env.ENCRYPTION_KEY) {
-    console.error("ENCRYPTION_KEY not set. Aborting migration to avoid irrecoverable encryption.");
+    console.error(
+      "ENCRYPTION_KEY not set. Aborting migration to avoid irrecoverable encryption.",
+    );
     process.exit(2);
   }
   await mongoose.connect(env.MONGODB_URI);
-  const legacy = await UserBotModel.find({ token: { $ne: null }, tokenEncrypted: { $in: [null, undefined, ""] } });
+  const legacy = await UserBotModel.find({
+    token: { $ne: null },
+    tokenEncrypted: { $in: [null, undefined, ""] },
+  });
   for (const rec of legacy) {
     try {
       if (!rec.token) continue;
@@ -25,4 +30,7 @@ async function run() {
   await mongoose.disconnect();
 }
 
-run().catch((e) => { console.error(e); process.exit(1); });
+run().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

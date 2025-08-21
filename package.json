@@ -13,8 +13,8 @@
     "build": "npm run clean && tsc -p tsconfig.json && node post-build.mjs",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write .",
-  "test": "vitest run",
-  "migrate:encrypt-tokens": "tsx scripts/migrateEncryptUserBotTokens.ts"
+    "test": "vitest run",
+    "migrate:encrypt-tokens": "tsx scripts/migrateEncryptUserBotTokens.ts"
   },
   "dependencies": {
     "@grammyjs/menu": "^1.2.1",

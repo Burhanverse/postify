@@ -55,10 +55,7 @@ function cleanupTemporaryStates(ctx: BotContext) {
     return;
   }
 
-  const temporaryKeys = [
-    "tempMessageId",
-    "lastErrorTime",
-  ];
+  const temporaryKeys = ["tempMessageId", "lastErrorTime"];
 
   let cleanedCount = 0;
   for (const key of temporaryKeys) {
@@ -103,7 +100,7 @@ export function clearChannelSession(ctx: BotContext) {
 }
 
 export class SessionManager {
-  private static staleSessions = new Map<number, number>(); 
+  private static staleSessions = new Map<number, number>();
   private static readonly STALE_THRESHOLD = 24 * 60 * 60 * 1000;
 
   static markActivity(userId: number) {

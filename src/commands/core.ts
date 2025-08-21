@@ -54,7 +54,9 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
   bot.command("botstatus", async (ctx) => {
     const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
     if (!ub) return ctx.reply("No personal bot registered.");
-    return ctx.reply(`Status: ${ub.status}${ub.lastError ? "\nLast error: " + ub.lastError : ""}`);
+    return ctx.reply(
+      `Status: ${ub.status}${ub.lastError ? "\nLast error: " + ub.lastError : ""}`,
+    );
   });
 
   // Unlink flow with confirmation
@@ -62,7 +64,10 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
     if (!ub) return ctx.reply("No personal bot to unlink.");
     ctx.session.awaitingUnlinkBotConfirm = true;
-    await ctx.reply("Type CONFIRM UNLINK to remove your personal bot (cannot be undone).", { });
+    await ctx.reply(
+      "Type CONFIRM UNLINK to remove your personal bot (cannot be undone).",
+      {},
+    );
   });
 
   bot.on("message", async (ctx, next) => {
@@ -77,7 +82,9 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
       if (!ub) return ctx.reply("Already removed.");
       await UserBotModel.deleteOne({ botId: ub.botId });
-      await ctx.reply("✅ Personal bot unlinked. You can /addbot again anytime.");
+      await ctx.reply(
+        "✅ Personal bot unlinked. You can /addbot again anytime.",
+      );
       return;
     }
 
@@ -120,7 +127,10 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
           `✅ Personal bot registered: @${record.username}.\nAdd this bot to your channels as admin, then open it and use /addchannel there to link channels. Use /mybot to view status.`,
         );
         getOrCreateUserBot(record.botId).catch((err) =>
-          logger.error({ err, botId: record.botId }, "Failed to start user bot"),
+          logger.error(
+            { err, botId: record.botId },
+            "Failed to start user bot",
+          ),
         );
       } catch (err) {
         logger.warn({ err }, "Failed to validate bot token");
@@ -161,21 +171,31 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
   });
 
   bot.command("migratechannels", async (ctx) => {
-    const legacy = await ChannelModel.find({ $or: [{ botId: { $exists: false } }, { botId: null }] });
+    const legacy = await ChannelModel.find({
+      $or: [{ botId: { $exists: false } }, { botId: null }],
+    });
     if (!legacy.length) {
-      await ctx.reply("All channels migrated (have botId).\nRelink any problematic ones via personal bot.");
+      await ctx.reply(
+        "All channels migrated (have botId).\nRelink any problematic ones via personal bot.",
+      );
       return;
     }
-    const lines = legacy.slice(0, 25).map(c => `• ${c.title || c.username || c.chatId} (chatId=${c.chatId})`);
-    await ctx.reply(`Legacy channels (need relink via personal bot):\n${lines.join("\n")}`);
+    const lines = legacy
+      .slice(0, 25)
+      .map(
+        (c) => `• ${c.title || c.username || c.chatId} (chatId=${c.chatId})`,
+      );
+    await ctx.reply(
+      `Legacy channels (need relink via personal bot):\n${lines.join("\n")}`,
+    );
   });
 
   bot.api
     .setMyCommands([
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
-  { command: "botstatus", description: "Personal bot health" },
-  { command: "unlinkbot", description: "Remove personal bot" },
+      { command: "botstatus", description: "Personal bot health" },
+      { command: "unlinkbot", description: "Remove personal bot" },
       { command: "channels", description: "List connected channels" },
       { command: "checkchannels", description: "Verify channel permissions" },
       { command: "migratechannels", description: "List legacy channels" },

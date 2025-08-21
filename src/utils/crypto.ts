@@ -3,12 +3,14 @@ import crypto from "crypto";
 // AES-256-GCM encryption helper. Provide ENCRYPTION_KEY (32 bytes hex or base64).
 const keyRaw = process.env.ENCRYPTION_KEY;
 if (!keyRaw) {
-  console.warn("ENCRYPTION_KEY not set – encryption uses ephemeral key (dev mode)." );
+  console.warn(
+    "ENCRYPTION_KEY not set – encryption uses ephemeral key (dev mode).",
+  );
 }
 const key = keyRaw
-  ? (keyRaw.length === 64 && /^[0-9a-f]+$/i.test(keyRaw)
-      ? Buffer.from(keyRaw, "hex")
-      : Buffer.from(keyRaw, "base64"))
+  ? keyRaw.length === 64 && /^[0-9a-f]+$/i.test(keyRaw)
+    ? Buffer.from(keyRaw, "hex")
+    : Buffer.from(keyRaw, "base64")
   : crypto.randomBytes(32);
 
 export function encrypt(plain: string): string {

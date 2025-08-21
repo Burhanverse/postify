@@ -33,14 +33,18 @@ function personalBotOwnershipGuard(ownerId: number) {
   };
 }
 
-function initial(): SessionData { return {}; }
+function initial(): SessionData {
+  return {};
+}
 
 export async function getOrCreateUserBot(botId: number) {
   const existing = activeBots.get(botId);
   if (existing) return existing.bot;
   const record = await UserBotModel.findOne({ botId, status: "active" });
   if (!record) throw new Error("User bot not found or inactive");
-  const rawToken = record.tokenEncrypted ? decrypt(record.tokenEncrypted) : record.token;
+  const rawToken = record.tokenEncrypted
+    ? decrypt(record.tokenEncrypted)
+    : record.token;
   if (!rawToken) throw new Error("Bot token missing (migration required)");
   const bot = new Bot<BotContext>(rawToken);
 
@@ -79,18 +83,25 @@ export async function getOrCreateUserBot(botId: number) {
   activeBots.set(botId, {
     bot,
     ownerTgId: record.ownerTgId,
-  username: record.username || undefined,
+    username: record.username || undefined,
     failures: 0,
     startedAt: new Date(),
   });
-  bot.start({ drop_pending_updates: false })
+  bot
+    .start({ drop_pending_updates: false })
     .then(() => {
-      logger.info({ botId, username: record.username, owner: record.ownerTgId }, "Personal bot started");
+      logger.info(
+        { botId, username: record.username, owner: record.ownerTgId },
+        "Personal bot started",
+      );
     })
     .catch(async (err) => {
       logger.error({ err, botId }, "Failed to start personal bot");
       stopUserBot(botId);
-      await UserBotModel.updateOne({ botId }, { $set: { status: "error", lastError: (err as Error).message } });
+      await UserBotModel.updateOne(
+        { botId },
+        { $set: { status: "error", lastError: (err as Error).message } },
+      );
     });
   return bot;
 }
@@ -98,12 +109,18 @@ export async function getOrCreateUserBot(botId: number) {
 export function stopUserBot(botId: number) {
   const meta = activeBots.get(botId);
   if (meta) {
-    try { meta.bot.stop(); } catch (e) { logger.warn({ e, botId }, "Error stopping personal bot"); }
+    try {
+      meta.bot.stop();
+    } catch (e) {
+      logger.warn({ e, botId }, "Error stopping personal bot");
+    }
     activeBots.delete(botId);
   }
 }
 
-export function listActiveUserBots() { return [...activeBots.keys()]; }
+export function listActiveUserBots() {
+  return [...activeBots.keys()];
+}
 
 export async function loadAllUserBotsOnStartup() {
   const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
@@ -112,7 +129,10 @@ export async function loadAllUserBotsOnStartup() {
     try {
       await getOrCreateUserBot(rec.botId);
     } catch (err) {
-      logger.error({ err, botId: rec.botId }, "Failed to launch personal bot on startup");
+      logger.error(
+        { err, botId: rec.botId },
+        "Failed to launch personal bot on startup",
+      );
     }
   }
 }
@@ -124,28 +144,44 @@ export function startUserBotSupervisor(intervalMs = 30000) {
   supervisorStarted = true;
   setInterval(async () => {
     try {
-      const activeRecords = await UserBotModel.find({ status: "active" }, { botId: 1, ownerTgId: 1 });
-      const desired = new Set(activeRecords.map(r => r.botId));
+      const activeRecords = await UserBotModel.find(
+        { status: "active" },
+        { botId: 1, ownerTgId: 1 },
+      );
+      const desired = new Set(activeRecords.map((r) => r.botId));
       // Restart missing
       for (const botId of desired) {
         if (!activeBots.has(botId)) {
           logger.warn({ botId }, "Supervisor restarting missing personal bot");
-          try { await getOrCreateUserBot(botId); } catch (e) { logger.error({ e, botId }, "Restart failed"); }
+          try {
+            await getOrCreateUserBot(botId);
+          } catch (e) {
+            logger.error({ e, botId }, "Restart failed");
+          }
         }
       }
       // Stop stray bots (status changed)
       for (const running of activeBots.keys()) {
         if (!desired.has(running)) {
-          logger.info({ botId: running }, "Stopping personal bot no longer active");
+          logger.info(
+            { botId: running },
+            "Stopping personal bot no longer active",
+          );
           stopUserBot(running);
         }
       }
       // Failure demotion
       for (const [botId, meta] of activeBots) {
         if (meta.failures >= 5) {
-          logger.error({ botId }, "Too many failures; marking user bot error and stopping");
+          logger.error(
+            { botId },
+            "Too many failures; marking user bot error and stopping",
+          );
           stopUserBot(botId);
-          await UserBotModel.updateOne({ botId }, { $set: { status: "error", lastError: "Too many runtime errors" } });
+          await UserBotModel.updateOne(
+            { botId },
+            { $set: { status: "error", lastError: "Too many runtime errors" } },
+          );
         }
       }
     } catch (err) {
