@@ -41,6 +41,7 @@ export interface SessionData {
   scheduleMessageId?: number; // scheduling submenu message id
   awaitingBotToken?: boolean; // waiting for user to send personal bot token
   awaitingUnlinkBotConfirm?: boolean; // confirmation flag for unlinkbot
+  draftLocked?: boolean; // when true, ignore further draft text/media/button inputs
 }
 
 function initial(): SessionData {

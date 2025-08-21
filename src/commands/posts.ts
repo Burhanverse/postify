@@ -239,7 +239,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   // Accept photo/video with caption (live preview update)
   bot.on(["message:photo", "message:video"], async (ctx, next) => {
-    if (!ctx.session.draft) return next();
+  if (!ctx.session.draft || ctx.session.draftLocked) return next();
     const msg = ctx.message as Message;
     const hasPhotos = (m: Message): m is Message & { photo: PhotoSize[] } => {
       if (!("photo" in m)) return false;
@@ -293,7 +293,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.on("message:text", async (ctx, next) => {
     // Button building
     // If we're in custom schedule input mode, skip draft text handling; later handler will process
-    if (ctx.session.waitingForScheduleInput) return next();
+  if (ctx.session.waitingForScheduleInput || ctx.session.draftLocked) return next();
     if (
       (ctx.session as Record<string, unknown>).awaitingButton &&
       ctx.session.draft
@@ -355,7 +355,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
   // Handle edited text messages for drafts
   bot.on("edited_message:text", async (ctx, next) => {
-    if (!ctx.session.draft || !ctx.session.initialDraftMessageId) return next();
+  if (!ctx.session.draft || !ctx.session.initialDraftMessageId || ctx.session.draftLocked) return next();
     if (ctx.editedMessage.message_id === ctx.session.initialDraftMessageId) {
       ctx.session.draft.text = formatToHtml(ctx.editedMessage.text);
       await renderDraftPreview(ctx);
@@ -499,6 +499,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "send") {
+  // Lock draft so no further content modifications are ingested while user chooses now vs schedule
+  ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
         .text("📤 Now", "draft:sendnow")
         .text("⏰ Schedule", "draft:schedule")
@@ -600,6 +602,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "back") {
       await ctx.answerCallbackQuery();
+  // Unlock draft editing when user returns
+  delete ctx.session.draftLocked;
       await renderDraftPreview(ctx);
       return;
     }
@@ -622,6 +626,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.lastDraftTextMessageId;
       delete ctx.session.draftSourceMessages;
       delete ctx.session.initialDraftMessageId;
+  delete ctx.session.draftLocked;
       await ctx.answerCallbackQuery();
       await ctx.reply(
         "❌ **Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.",
@@ -638,6 +643,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "preview") {
       delete ctx.session.draftPreviewMessageId; // Force new preview message
       await ctx.answerCallbackQuery();
+      if (ctx.session.draftLocked) {
+        await ctx.reply("🔒 Draft is locked while sending/scheduling menu is open.", { parse_mode: "Markdown" });
+        return;
+      }
       await ctx.reply(
         "👁 **Generating fresh preview...**\n\nCreating a new preview of your draft.",
         { parse_mode: "Markdown" },
@@ -646,6 +655,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "sendnow") {
+  // Keep draft locked during send operation
       // Immediate send without scheduling
       const draft = ctx.session.draft;
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
@@ -735,6 +745,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         delete ctx.session.lastDraftTextMessageId;
         delete ctx.session.draftSourceMessages;
         delete ctx.session.initialDraftMessageId;
+  delete ctx.session.draftLocked;
 
         await ctx.answerCallbackQuery();
 
@@ -764,6 +775,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       } catch (error) {
         console.error("Send now error:", error);
         try { await ctx.answerCallbackQuery(); } catch {}
+  // Unlock to let user adjust after failure
+  delete ctx.session.draftLocked;
 
         // Try to provide more specific error information
         const sendErrorMessage = async (message: string) => {
