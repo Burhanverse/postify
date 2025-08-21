@@ -10,7 +10,7 @@ import { validationMiddleware } from "../middleware/validation";
 import { userMiddleware } from "../middleware/user";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
 import { registerPostCommands } from "../commands/posts";
-import { registerChannelsCommands } from "../commands/channels";
+import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
 import { decrypt } from "../utils/crypto.js";
 
 interface ActiveBotMeta {
@@ -61,6 +61,11 @@ export async function getOrCreateUserBot(botId: number) {
 
   registerPostCommands(bot);
   registerChannelsCommands(bot, { enableLinking: true });
+
+  bot.on("callback_query:data", async (ctx, next) => {
+    if (await handleChannelCallback(ctx)) return; // handled
+    return next();
+  });
 
   bot.api
     .setMyCommands([
