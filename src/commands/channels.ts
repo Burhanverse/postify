@@ -46,7 +46,6 @@ export function registerChannelsCommands(bot: Bot<BotContext>, opts: ChannelComm
   });
 
   if (opts.enableLinking) {
-    // Provide /addchannel inside personal bot for secure linking.
     bot.command("addchannel", async (ctx) => {
       await ctx.reply(
         "Send @username of a public channel or forward a message from the private channel where THIS personal bot is admin.",

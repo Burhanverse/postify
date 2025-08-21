@@ -7,12 +7,11 @@ const UserSchema = new Schema(
     firstName: String,
     lastName: String,
     languageCode: String,
-    roles: [{ type: String }], // global roles maybe
+    roles: [{ type: String }],
     channels: [{ type: Types.ObjectId, ref: "Channel" }],
-    // User preferences persisted across sessions
     preferences: {
-      timezone: { type: String, default: "UTC" }, // IANA timezone string
-      lastSchedulePreset: { type: String }, // e.g., 'in 1h', 'tomorrow 09:00'
+      timezone: { type: String, default: "UTC" },
+      lastSchedulePreset: { type: String },
       lastCustomScheduleInput: { type: String },
     },
     createdAt: { type: Date, default: Date.now },

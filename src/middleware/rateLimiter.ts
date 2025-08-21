@@ -12,14 +12,13 @@ class RateLimiter {
   private limits = new Map<number, RateLimitEntry>();
   private readonly maxRequests: number;
   private readonly windowMs: number;
-  private readonly cleanupInterval = 300000; // cleanup every 5 minutes
+  private readonly cleanupInterval = 300000;
   private readonly exemptActions: Set<string>;
 
   constructor() {
-    this.maxRequests = env.RATE_LIMIT_MAX_REQUESTS || 60; // loosen default to 60/min
+    this.maxRequests = env.RATE_LIMIT_MAX_REQUESTS || 60;
     this.windowMs = env.RATE_LIMIT_WINDOW_MS || 60000;
     const rawExempt = env.RATE_LIMIT_EXEMPT_ACTIONS;
-    // Default exemptions: draft typing & media uploads, internal preview updates
     const defaults = [
       "text_message",
       "photo_upload",
@@ -36,7 +35,6 @@ class RateLimiter {
 
   isRateLimited(userId: number, action: string): boolean {
     const now = Date.now();
-    // Skip limiting for exempt actions
     if (this.exemptActions.has(action)) return false;
     const entry = this.limits.get(userId);
 
@@ -129,9 +127,8 @@ function getActionFromContext(ctx: BotContext): string {
     return ctx.message.text.split(" ")[0];
   }
   if (ctx.callbackQuery?.data) {
-    // include first two segments for finer exemptions (e.g., draft:type)
     const parts = ctx.callbackQuery.data.split(":");
-    return `callback:${parts.slice(0, 2).join(":")}`; // e.g., callback:draft or callback:draft:type
+    return `callback:${parts.slice(0, 2).join(":")}`;
   }
   if (ctx.message?.photo) return "photo_upload";
   if (ctx.message?.video) return "video_upload";

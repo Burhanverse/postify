@@ -8,20 +8,17 @@ export async function sessionCleanupMiddleware(
   try {
     await next();
   } finally {
-    // Clean up after request processing
     await cleanupSession(ctx);
   }
 }
 
 async function cleanupSession(ctx: BotContext) {
   try {
-    // Ensure session exists before cleanup
     if (!ctx.session) {
       logger.debug({ userId: ctx.from?.id }, "No session to cleanup");
       return;
     }
 
-    // Clean up expired draft mode states
     if (ctx.session.draftEditMode && !ctx.session.draft) {
       delete ctx.session.draftEditMode;
       logger.debug(
@@ -30,7 +27,6 @@ async function cleanupSession(ctx: BotContext) {
       );
     }
 
-    // Clean up orphaned preview message references
     if (ctx.session.draftPreviewMessageId && !ctx.session.draft) {
       delete ctx.session.draftPreviewMessageId;
       delete ctx.session.lastDraftTextMessageId;
@@ -42,7 +38,6 @@ async function cleanupSession(ctx: BotContext) {
       );
     }
 
-    // Clean up temporary states
     cleanupTemporaryStates(ctx);
   } catch (error) {
     logger.error(
@@ -56,12 +51,10 @@ async function cleanupSession(ctx: BotContext) {
 }
 
 function cleanupTemporaryStates(ctx: BotContext) {
-  // Ensure session exists
   if (!ctx.session) {
     return;
   }
 
-  // List of temporary session keys that should be cleaned up after certain operations
   const temporaryKeys = [
     "tempMessageId",
     "lastErrorTime",
@@ -109,10 +102,9 @@ export function clearChannelSession(ctx: BotContext) {
   logger.debug({ userId: ctx.from?.id }, "Channel session cleared");
 }
 
-// Periodic cleanup for stale sessions (if needed in the future)
 export class SessionManager {
-  private static staleSessions = new Map<number, number>(); // userId -> lastActivity
-  private static readonly STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
+  private static staleSessions = new Map<number, number>(); 
+  private static readonly STALE_THRESHOLD = 24 * 60 * 60 * 1000;
 
   static markActivity(userId: number) {
     this.staleSessions.set(userId, Date.now());

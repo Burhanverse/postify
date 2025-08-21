@@ -4,17 +4,17 @@ const ChannelSchema = new Schema(
   {
     chatId: { type: Number, index: true, unique: true, required: true },
     title: String,
-    username: String, // public handle
+    username: String,
     type: { type: String },
     inviteLink: String,
-    owners: [{ type: Number }], // tg user ids with owner role
-    admins: [{ userId: Number, roles: [String] }], // roles: owner, editor, scheduler, analyst
+    owners: [{ type: Number }],
+    admins: [{ userId: Number, roles: [String] }],
     permissions: {
       canPost: Boolean,
       canEdit: Boolean,
       canDelete: Boolean,
     },
-    botId: { type: Number, index: true }, // personal bot responsible for posting
+    botId: { type: Number, index: true },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },

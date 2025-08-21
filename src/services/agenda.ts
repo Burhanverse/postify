@@ -3,7 +3,6 @@ import { env } from "../config/env";
 import { logger } from "../utils/logger";
 import { PostModel } from "../models/Post";
 import { ChannelModel } from "../models/Channel";
-// Import publisher (ensure extension for ESM resolution)
 import { publishPost } from "./publisher";
 import { DateTime } from "luxon";
 import { Types } from "mongoose";
@@ -17,16 +16,16 @@ export function getAgenda() {
 export async function initAgenda() {
   agenda = new Agenda({
     db: { address: env.MONGODB_URI, collection: "jobs" },
-    processEvery: "30 seconds", // Process jobs every 30 seconds
-    maxConcurrency: 10, // Maximum concurrent job processing
-    defaultLockLifetime: 60000, // 1 minute lock lifetime
+    processEvery: "30 seconds",
+    maxConcurrency: 10,
+    defaultLockLifetime: 60000,
   });
 
   // Enhanced job definition with better error handling and logging
   agenda.define(
     "publish_post",
     {
-      concurrency: 5, // Max 5 posts can be published concurrently
+      concurrency: 5,
     },
     async (job: Job) => {
       const { postId, channelId, userId, timezone } = job.attrs.data as {
@@ -100,7 +99,7 @@ export async function initAgenda() {
           );
         }
 
-        throw error; // Re-throw to mark job as failed
+        throw error;
       }
     },
   );

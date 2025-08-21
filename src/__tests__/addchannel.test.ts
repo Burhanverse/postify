@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { getUserChannels } from "../commands/channels";
 
-// Mock the ChannelModel
 vi.mock("../models/Channel", () => ({
   ChannelModel: {
     find: vi.fn(),
@@ -14,7 +13,6 @@ describe("addchannel functionality", () => {
   });
 
   it("should handle private channel forwarded message", async () => {
-    // Mock context for forwarded message from private channel
     const forwardedMessage = {
       forward_from_chat: {
         id: -1001234567890,
@@ -23,7 +21,6 @@ describe("addchannel functionality", () => {
       },
     };
 
-    // Test the channel data extraction logic
     const chatId = forwardedMessage.forward_from_chat.id;
     const title = forwardedMessage.forward_from_chat.title;
     const type = forwardedMessage.forward_from_chat.type;
@@ -34,7 +31,6 @@ describe("addchannel functionality", () => {
   });
 
   it("should handle public channel username", async () => {
-    // Test username parsing logic
     const usernameText = "@testchannel";
     const usernameRegex = /^@\w{4,}$/;
     

@@ -23,12 +23,11 @@ interface ActiveBotMeta {
 
 const activeBots = new Map<number, ActiveBotMeta>();
 
-// Ownership guard middleware for personal bots
+// Ownership guard middleware
 function personalBotOwnershipGuard(ownerId: number) {
   return async (ctx: BotContext, next: () => Promise<void>) => {
     if (!ctx.from || ctx.from.id !== ownerId) {
-      // Ignore silently to avoid leaking existence
-      return; // do not call next
+      return;
     }
     return next();
   };
@@ -59,13 +58,11 @@ export async function getOrCreateUserBot(botId: number) {
   registerPostCommands(bot);
   registerChannelsCommands(bot, { enableLinking: true });
 
-  // Set bot command menu for personal bot (owner only context)
   bot.api
     .setMyCommands([
       { command: "newpost", description: "Create a new post" },
       { command: "addchannel", description: "Link a channel to this bot" },
       { command: "channels", description: "List linked channels" },
-      { command: "mybot", description: "Bot status & info (main bot command)" },
       { command: "schedule", description: "(Use buttons)" },
       { command: "cancel", description: "Cancel current draft" },
     ])
@@ -79,7 +76,6 @@ export async function getOrCreateUserBot(botId: number) {
     logger.error({ err, botId }, "Unhandled personal bot error");
   });
 
-  // Register bot metadata BEFORE initiating long-polling so publishing can proceed without waiting.
   activeBots.set(botId, {
     bot,
     ownerTgId: record.ownerTgId,
@@ -87,14 +83,13 @@ export async function getOrCreateUserBot(botId: number) {
     failures: 0,
     startedAt: new Date(),
   });
-  // Start long polling asynchronously (do not await to avoid blocking publishPost or command handlers)
   bot.start({ drop_pending_updates: false })
     .then(() => {
       logger.info({ botId, username: record.username, owner: record.ownerTgId }, "Personal bot started");
     })
     .catch(async (err) => {
       logger.error({ err, botId }, "Failed to start personal bot");
-      stopUserBot(botId); // remove from active set
+      stopUserBot(botId);
       await UserBotModel.updateOne({ botId }, { $set: { status: "error", lastError: (err as Error).message } });
     });
   return bot;
