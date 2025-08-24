@@ -72,6 +72,7 @@ export async function getOrCreateUserBot(botId: number) {
   bot.api
     .setMyCommands([
       { command: "newpost", description: "Create a new post" },
+      { command: "queue", description: "View scheduled posts" },
       { command: "addchannel", description: "Link a channel to this bot" },
       { command: "channels", description: "List linked channels" },
       { command: "schedule", description: "(Use buttons)" },
