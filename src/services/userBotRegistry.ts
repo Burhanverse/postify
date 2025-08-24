@@ -9,6 +9,7 @@ import { concurrencyMiddleware } from "../middleware/concurrency";
 import { validationMiddleware } from "../middleware/validation";
 import { userMiddleware } from "../middleware/user";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
+import { messageCleanupMiddleware } from "../middleware/messageCleanup";
 import { registerPostCommands } from "../commands/posts";
 import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
 import { decrypt } from "../utils/crypto.js";
@@ -58,6 +59,7 @@ export async function getOrCreateUserBot(botId: number) {
   bot.use(concurrencyMiddleware);
   bot.use(userMiddleware);
   bot.use(sessionCleanupMiddleware);
+  bot.use(messageCleanupMiddleware);
 
   registerPostCommands(bot);
   registerChannelsCommands(bot, { enableLinking: true });

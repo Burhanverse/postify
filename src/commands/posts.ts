@@ -19,6 +19,7 @@ import {
 } from "../utils/commandHelpers";
 import { clearDraftSession } from "../middleware/sessionCleanup";
 import { logUserActivity } from "../middleware/logging";
+import { cleanupOldDraftPreview } from "../middleware/messageCleanup";
 import { handleScheduleCommand, handleScheduleCallback } from "./scheduling";
 import { postScheduler } from "../services/scheduler";
 import { getUserChannels } from "./channels";
@@ -663,6 +664,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         );
         return;
       }
+      // Clean up old draft preview when user explicitly requests new one
+      await cleanupOldDraftPreview(ctx);
       await ctx.reply(
         "👁 **Generating fresh preview...**\n\nCreating a new preview of your draft.",
         { parse_mode: "Markdown" },

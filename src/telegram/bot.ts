@@ -14,6 +14,7 @@ import { concurrencyMiddleware } from "../middleware/concurrency";
 import { validationMiddleware } from "../middleware/validation";
 import { loggingMiddleware } from "../middleware/logging";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
+import { messageCleanupMiddleware } from "../middleware/messageCleanup";
 import { PostModel } from "../models/Post";
 import { logger } from "../utils/logger";
 
@@ -42,6 +43,13 @@ export interface SessionData {
   awaitingBotToken?: boolean;
   awaitingUnlinkBotConfirm?: boolean;
   draftLocked?: boolean;
+  // Message cleanup tracking
+  recentBotMessages?: number[]; // Array of message IDs to track for cleanup
+  protectedMessages?: {
+    scheduleMessages?: number[];
+    postSentNotices?: number[];
+    currentDraftPreview?: number;
+  };
 }
 
 function initial(): SessionData {
@@ -56,6 +64,7 @@ export const bot = new Bot<BotContext>(env.BOT_TOKEN);
 bot.use(loggingMiddleware);
 bot.use(errorHandlerMiddleware);
 bot.use(session({ initial }));
+bot.use(messageCleanupMiddleware); // Add message cleanup after session
 bot.use(validationMiddleware);
 bot.use(rateLimitMiddleware);
 bot.use(concurrencyMiddleware);
