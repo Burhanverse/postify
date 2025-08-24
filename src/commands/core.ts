@@ -43,30 +43,28 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       await ctx.reply("No personal bot configured. Use /addbot to add one.");
       return;
     }
-    await ctx.reply(
-      `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`,
-    );
-  });
-
-  // Provide status + restart attempt
-  bot.command("botstatus", async (ctx) => {
-    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
-    if (!ub) return ctx.reply("No personal bot registered.");
-    return ctx.reply(
-      `Status: ${ub.status}${ub.lastError ? "\nLast error: " + ub.lastError : ""}`,
-    );
+      let msg = `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`;
+      if (ub.lastError) {
+        msg += `\nLast error: ${ub.lastError}`;
+      }
+      await ctx.reply(msg);
   });
 
   // Unlink flow with confirmation
-  bot.command("unlinkbot", async (ctx) => {
-    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
-    if (!ub) return ctx.reply("No personal bot to unlink.");
-    ctx.session.awaitingUnlinkBotConfirm = true;
-    await ctx.reply(
-      "Type ```CONFIRM UNLINK``` to remove your personal bot (cannot be undone).",
-      {},
-    );
-  });
+    bot.command("unlinkbot", async (ctx) => {
+      const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+      if (!ub) return ctx.reply("No personal bot to unlink.");
+      ctx.session.awaitingUnlinkBotConfirm = true;
+      await ctx.reply(
+        "**Are you sure you want to unlink your personal bot?**\n\nType `CONFIRM UNLINK` to remove your personal bot (cannot be undone).",
+        {
+          parse_mode: "Markdown",
+          reply_markup: {
+            inline_keyboard: [[{ text: "Cancel", callback_data: "cancel_unlinkbot" }]],
+          },
+        },
+      );
+    });
 
   bot.on("message", async (ctx, next) => {
     // Unlink confirmation
@@ -74,8 +72,8 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       const val = ctx.message.text.trim();
       ctx.session.awaitingUnlinkBotConfirm = false;
       if (val !== "CONFIRM UNLINK") {
-        await ctx.reply("Canceled.");
-        return;
+    await ctx.reply("Canceled.");
+    return;
       }
       const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
       if (!ub) return ctx.reply("Already removed.");
@@ -85,6 +83,20 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       );
       return;
     }
+  bot.on("callback_query:data", async (ctx) => {
+    if (ctx.callbackQuery.data === "cancel_unlinkbot") {
+      ctx.session.awaitingUnlinkBotConfirm = false;
+      await ctx.answerCallbackQuery({ text: "Unlink canceled." });
+      if (ctx.callbackQuery.message) {
+        try {
+          await ctx.api.deleteMessage(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id);
+        } catch (err) {
+          logger.warn({ err }, "Failed to delete unlink confirmation message");
+        }
+      }
+      await ctx.reply("Unlink canceled.");
+    }
+  });
 
     if (ctx.session.awaitingBotToken && ctx.message?.text) {
       const token = ctx.message.text.trim();
@@ -165,7 +177,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     .setMyCommands([
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
-      { command: "botstatus", description: "Personal bot health" },
       { command: "unlinkbot", description: "Remove personal bot" },
       { command: "migratechannels", description: "List legacy channels" },
     ])
