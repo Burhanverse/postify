@@ -34,19 +34,19 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
     const kb = new InlineKeyboard();
     // Row: type switch
-    kb.text(d.postType === "text" ? "📝 Text" : "Text", "draft:type:text")
-      .text(d.postType === "photo" ? "🖼 Photo" : "Photo", "draft:type:photo")
-      .text(d.postType === "video" ? "🎬 Video" : "Video", "draft:type:video")
+    kb.text(d.postType === "text" ? "Text" : "Text", "draft:type:text")
+      .text(d.postType === "photo" ? "Photo" : "Photo", "draft:type:photo")
+      .text(d.postType === "video" ? "Video" : "Video", "draft:type:video")
       .row();
-    kb.text("➕ Button", "draft:addbtn")
-      .text("✏️ Buttons", "draft:managebtns")
+    kb.text("Add Button", "draft:addbtn")
+      .text("Manage Buttons", "draft:managebtns")
       .row();
-    kb.text("👁 Preview", "draft:preview")
-      .text("🧹 Clear", "draft:clear")
+    kb.text("Preview", "draft:preview")
+      .text("Clear", "draft:clear")
       .row();
 
     // Standard buttons for creating new posts
-    kb.text("📤 Send", "draft:send").text("✖️ Cancel", "draft:cancel").row();
+    kb.text("Send", "draft:send").text("Cancel", "draft:cancel").row();
 
     const caption = d.text || "(empty)";
     const existingId =
@@ -110,8 +110,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       );
       const friendly =
         err instanceof Error && /can't parse entities|entity/i.test(err.message)
-          ? "❌ Formatting error in your text. Check unclosed <b>, <i>, <code>, <pre>, or <a> tags."
-          : "❌ Failed to update preview. Please try editing or sending text again.";
+          ? "Formatting error in your text. Check unclosed <b>, <i>, <code>, <pre>, or <a> tags."
+          : "Failed to update preview. Please try editing or sending text again.";
       try {
         await ctx.reply(friendly, { parse_mode: "Markdown" });
       } catch {}
@@ -149,7 +149,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
     if (!channels.length) {
       await ctx.reply(
-        "❌ **No channels found!**\n\n" +
+        "**No channels found!**\n\n" +
           "You need to link at least one channel before creating posts.\n" +
           "Use /addchannel to connect a channel first.",
         { parse_mode: "Markdown" },
@@ -169,7 +169,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.initialDraftMessageId;
 
       await ctx.reply(
-        `📝 **Draft started for:** ${channel.title || channel.username || channel.chatId}\n\n` +
+        `**Draft started for:** ${channel.title || channel.username || channel.chatId}\n\n` +
           "Send text to add to your draft. Use HTML tags for formatting:\n" +
           "• `<b>bold</b>` for **bold**\n" +
           "• `<i>italic</i>` for *italic*\n" +
@@ -196,10 +196,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
     });
 
-    keyboard.text("❌ Cancel", "newpost:cancel");
+    keyboard.text("Cancel", "newpost:cancel");
 
     await ctx.reply(
-      "📝 **Select a channel to create a post:**\n\n" +
+      "**Select a channel to create a post:**\n\n" +
         "Choose which channel you want to create a post for:",
       {
         reply_markup: keyboard,
@@ -314,25 +314,25 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         if (/^https?:\/\//i.test(target)) {
           ctx.session.draft.buttons?.push({ text, url: target });
           await ctx.reply(
-            `✅ **URL button added**\n\nButton: "${text}"\nURL: ${target}`,
+            `**URL button added**\n\nButton: "${text}"\nURL: ${target}`,
             { parse_mode: "Markdown" },
           );
         } else if (/^CALLBACK:/i.test(target)) {
           const key = target.split(":")[1];
           ctx.session.draft.buttons?.push({ text, callbackData: key });
           await ctx.reply(
-            `✅ **Callback button added**\n\nButton: "${text}"\nCallback: ${key}`,
+            `**Callback button added**\n\nButton: "${text}"\nCallback: ${key}`,
             { parse_mode: "Markdown" },
           );
         } else {
           await ctx.reply(
-            "❌ **Unrecognized button format**\n\nUse URL format: `Button Text | https://example.com`\nOr callback format: `Button Text | CALLBACK:key`",
+            "**Unrecognized button format**\n\nUse URL format: `Button Text | https://example.com`\nOr callback format: `Button Text | CALLBACK:key`",
             { parse_mode: "Markdown" },
           );
         }
       } else {
         await ctx.reply(
-          "❌ **Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`",
+          "**Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`",
           { parse_mode: "Markdown" },
         );
       }
@@ -394,7 +394,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         if (!channel) {
           await ctx.answerCallbackQuery();
           await ctx.editMessageText(
-            "❌ **Error:** Channel not found or access denied.\n\nPlease use /addchannel to link a valid channel.",
+            "**Error:** Channel not found or access denied.\n\nPlease use /addchannel to link a valid channel.",
             { parse_mode: "Markdown" },
           );
           return;
@@ -410,8 +410,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
         await ctx.answerCallbackQuery();
         await ctx.editMessageText(
-          `✅ **Channel Selected:** ${channel.title || channel.username || chatId}\n\n` +
-            "📝 **Draft started!**\n\n" +
+          `**Channel Selected:** ${channel.title || channel.username || chatId}\n\n` +
+            "**Draft started!**\n\n" +
             "Send text to add to your draft. Use HTML tags for formatting:\n" +
             "• \`<b>bold</b>\` for **bold**\n" +
             "• \`<i>italic</i>\` for *italic*\n" +
@@ -428,7 +428,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (action === "cancel") {
         await ctx.answerCallbackQuery();
         await ctx.editMessageText(
-          "❌ **Post creation cancelled.**\n\nUse /newpost to start a new post.",
+          "**Post creation cancelled.**\n\nUse /newpost to start a new post.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -465,7 +465,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       if (!channels || channels.length === 0) {
         await ctx.editMessageText(
-          "❌ **No channels found**\n\nPlease add channels first using /addchannel.",
+          "**No channels found**\n\nPlease add channels first using /addchannel.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -477,10 +477,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           channel.title || channel.username || channel.chatId.toString();
         keyboard.text(displayName, `newpost:select:${channel.chatId}`).row();
       });
-      keyboard.text("❌ Cancel", "newpost:cancel");
+      keyboard.text("Cancel", "newpost:cancel");
 
       await ctx.editMessageText(
-        "📝 **Create New Post**\n\n" + "Select a channel to post to:",
+        "**Create New Post**\n\n" + "Select a channel to post to:",
         { reply_markup: keyboard, parse_mode: "Markdown" },
       );
       return;
@@ -496,7 +496,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (!ctx.session.draft) {
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        "❌ **No draft found**\n\nPlease start a new post with /newpost first.",
+        "**No draft found**\n\nPlease start a new post with /newpost first.",
         { parse_mode: "Markdown" },
       );
       return;
@@ -516,10 +516,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       // Lock draft so no further content modifications are ingested while user chooses now vs schedule
       ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
-        .text("📤 Now", "draft:sendnow")
-        .text("⏰ Schedule", "draft:schedule")
+        .text("Now", "draft:sendnow")
+        .text("Schedule", "draft:schedule")
         .row()
-        .text("⬅ Back", "draft:back");
+        .text("Back", "draft:back");
       try {
         if (ctx.session.draftPreviewMessageId) {
           await ctx.api.editMessageReplyMarkup(
@@ -539,7 +539,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!buttons.length) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **No buttons found**\n\nAdd buttons first using the ➕ Button option or /addbutton command.",
+          "**No buttons found**\n\nAdd buttons first using the Add Button option or /addbutton command.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -548,7 +548,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       buttons.forEach((b, i) => {
         kbList.text(`${i + 1}. ${b.text}`, `draft:showbtn:${i}`).row();
       });
-      kbList.text("⬅ Back", "draft:back");
+      kbList.text("Back", "draft:back");
       await ctx.editMessageReplyMarkup({ reply_markup: kbList });
       await ctx.answerCallbackQuery();
       return;
@@ -557,7 +557,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       (ctx.session as Record<string, unknown>).awaitingButton = true;
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        "➕ **Add Button**\n\n" +
+        "**Add Button**\n\n" +
           "Send your button in this format:\n" +
           "• `Button Text | https://example.com` for URL buttons\n" +
           "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
@@ -572,16 +572,16 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!btn) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **Button not found**\n\nThe selected button no longer exists.",
+          "**Button not found**\n\nThe selected button no longer exists.",
           { parse_mode: "Markdown" },
         );
         return;
       }
       const kbBtn = new InlineKeyboard()
-        .text("🔗 Edit", `draft:editbtn:${idx}`)
-        .text("🗑 Remove", `draft:delbtn:${idx}`)
+        .text("Edit", `draft:editbtn:${idx}`)
+        .text("Remove", `draft:delbtn:${idx}`)
         .row()
-        .text("⬅ Buttons", "draft:managebtns");
+        .text("Buttons", "draft:managebtns");
       await ctx.editMessageReplyMarkup({ reply_markup: kbBtn });
       await ctx.answerCallbackQuery();
       return;
@@ -592,7 +592,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (ctx.session.draft.buttons) ctx.session.draft.buttons.splice(idx, 1);
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        `✅ **Button removed**\n\nDeleted: "${deletedButton?.text || "Unknown button"}"`,
+        `**Button removed**\n\nDeleted: "${deletedButton?.text || "Unknown button"}"`,
         { parse_mode: "Markdown" },
       );
       await renderDraftPreview(ctx);
@@ -605,7 +605,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       (ctx.session as Record<string, unknown>).editingButtonIndex = idx;
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        `✏️ **Edit Button: "${btn?.text || "Unknown"}"**\n\n` +
+        `**Edit Button: "${btn?.text || "Unknown"}"**\n\n` +
           "Send the new button in this format:\n" +
           "• `Button Text | https://example.com` for URL buttons\n" +
           "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
@@ -628,7 +628,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.initialDraftMessageId;
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        "🧹 **Draft cleared**\n\nYour draft has been reset. You can start adding content again.",
+        "**Draft cleared**\n\nYour draft has been reset. You can start adding content again.",
         { parse_mode: "Markdown" },
       );
       await renderDraftPreview(ctx);
@@ -643,7 +643,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       delete ctx.session.draftLocked;
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        "❌ **Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.",
+        "**Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.",
         { parse_mode: "Markdown" },
       );
       return;
@@ -659,7 +659,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       await ctx.answerCallbackQuery();
       if (ctx.session.draftLocked) {
         await ctx.reply(
-          "🔒 Draft is locked while sending/scheduling menu is open.",
+          "Draft is locked while sending/scheduling menu is open.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -667,7 +667,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       // Clean up old draft preview when user explicitly requests new one
       await cleanupOldDraftPreview(ctx);
       await ctx.reply(
-        "👁 **Generating fresh preview...**\n\nCreating a new preview of your draft.",
+        "**Generating fresh preview...**\n\nCreating a new preview of your draft.",
         { parse_mode: "Markdown" },
       );
       await renderDraftPreview(ctx);
@@ -680,7 +680,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **Draft is empty!**\n\nAdd text or media content first before sending.",
+          "**Draft is empty!**\n\nAdd text or media content first before sending.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -690,7 +690,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!ctx.session.selectedChannelChatId) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **No channel selected!**\n\nUse /newpost to select a channel first.",
+          "**No channel selected!**\n\nUse /newpost to select a channel first.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -704,7 +704,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!channel) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **Channel not found!**\n\nPlease use /newpost to select a valid channel.",
+          "**Channel not found!**\n\nPlease use /newpost to select a valid channel.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -714,7 +714,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!channel.botId) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat.",
+          "**Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -729,7 +729,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (!userBotRecord) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
-          "❌ **Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
+          "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
           { parse_mode: "Markdown" },
         );
         return;
@@ -772,7 +772,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         await ctx.answerCallbackQuery();
 
         // Check if the current message has media content
-        const successMessage = `✅ **Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
+        const successMessage = `**Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
 
         try {
           if (
@@ -821,28 +821,28 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         if (error instanceof Error) {
           if (error.message.includes("chat not found")) {
             await sendErrorMessage(
-              "❌ **Error: Channel not found**\n\nPlease re-add the channel with /addchannel",
+              "**Error: Channel not found**\n\nPlease re-add the channel with /addchannel",
             );
           } else if (
             error.message.includes("not enough rights") ||
             error.message.includes("lacks posting rights")
           ) {
             await sendErrorMessage(
-              "❌ **Error: Insufficient permissions**\n\nPersonal bot lacks permission to post. Make sure your personal bot is still an admin with posting rights.",
+              "**Error: Insufficient permissions**\n\nPersonal bot lacks permission to post. Make sure your personal bot is still an admin with posting rights.",
             );
           } else if (
             error.message.includes("personal bot") ||
             error.message.includes("Personal bot inactive")
           ) {
             await sendErrorMessage(
-              "❌ **Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
+              "**Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
             );
           } else {
-            await sendErrorMessage(`❌ **Error occurred**\n\n${error.message}`);
+            await sendErrorMessage(`**Error occurred**\n\n${error.message}`);
           }
         } else {
           await sendErrorMessage(
-            "❌ **Unknown error occurred**\n\nPlease try again or contact support.",
+            "**Unknown error occurred**\n\nPlease try again or contact support.",
           );
         }
       }
@@ -905,12 +905,12 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         ) {
           ctx.session.draft.buttons[idx] = newBtn as DraftButton;
           await ctx.reply(
-            `✅ **Button updated**\n\nUpdated: "${newBtn.text}"`,
+            `**Button updated**\n\nUpdated: "${newBtn.text}"`,
             { parse_mode: "Markdown" },
           );
         } else {
           ctx.session.draft.buttons?.push(newBtn as DraftButton);
-          await ctx.reply(`✅ **Button added**\n\nAdded: "${newBtn.text}"`, {
+          await ctx.reply(`**Button added**\n\nAdded: "${newBtn.text}"`, {
             parse_mode: "Markdown",
           });
         }
@@ -920,7 +920,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         return;
       } else {
         await ctx.reply(
-          "❌ **Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`",
+          "**Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`",
           { parse_mode: "Markdown" },
         );
         return;
@@ -944,7 +944,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.command("queue", async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return;
     }
 
@@ -966,7 +966,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         const channel = await ChannelModel.findOne({ owners: userId });
         if (!channel) {
           await ctx.reply(
-            "❌ **No channels found**\n\nUse /addchannel to link a channel first.",
+            "**No channels found**\n\nUse /addchannel to link a channel first.",
             { parse_mode: "Markdown" },
           );
           return;
@@ -985,7 +985,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       if (result.posts.length === 0) {
         await ctx.reply(
-          "📭 **Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.",
+          "**Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.",
           { parse_mode: "Markdown" },
         );
         return;
@@ -996,7 +996,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       const channelName =
         channel?.title || channel?.username || channel?.chatId || "Unknown";
 
-      let response = `📅 **Scheduled Posts for ${channelName}**\n`;
+      let response = `**Scheduled Posts for ${channelName}**\n`;
       response += `(${result.total} total scheduled)\n\n`;
 
       result.posts.forEach((post, index) => {
@@ -1008,11 +1008,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           ? post.text.length > 50
             ? post.text.substring(0, 50) + "..."
             : post.text
-          : `📸 ${post.type} post`;
+          : `${post.type} post`;
 
         response += `${index + 1}. **${preview}**\n`;
-        response += `   ⏰ ${timeDisplay} UTC (${relativeTime})\n`;
-        response += `   🆔 \`${post._id.toString()}\`\n\n`;
+        response += `   ${timeDisplay} UTC (${relativeTime})\n`;
+        response += `   ID: \`${post._id.toString()}\`\n\n`;
       });
 
       if (result.hasMore) {
@@ -1021,11 +1021,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
       // Add interactive buttons
       const keyboard = new InlineKeyboard()
-        .text("🔄 Refresh", "queue_refresh")
-        .text("📊 Stats", "queue_stats")
+        .text("Refresh", "queue_refresh")
+        .text("Stats", "queue_stats")
         .row()
-        .text("📝 New Post", "new_post_quick")
-        .text("❌ Close", "close_message");
+        .text("New Post", "new_post_quick")
+        .text("Close", "close_message");
 
       await ctx.reply(response, {
         reply_markup: keyboard,
@@ -1040,7 +1040,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         "Error in enhanced queue command",
       );
 
-      await ctx.reply("❌ **Error loading queue**\n\nPlease try again later.", {
+      await ctx.reply("**Error loading queue**\n\nPlease try again later.", {
         parse_mode: "Markdown",
       });
     }
@@ -1076,10 +1076,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         .limit(5),
     ]);
 
-    let response = `📋 **Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
+    let response = `**Posts for:** ${channel.title || channel.username || channel.chatId}\n\n`;
 
     if (scheduled.length > 0) {
-      response += "📅 **Scheduled Posts:**\n";
+      response += "**Scheduled Posts:**\n";
       scheduled.forEach((p, index) => {
         const preview = p.text
           ? p.text.length > 40
@@ -1092,7 +1092,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
 
     if (published.length > 0) {
-      response += "📢 **Published Posts:**\n";
+      response += "**Published Posts:**\n";
       published.forEach((p, index) => {
         const preview = p.text
           ? p.text.length > 40

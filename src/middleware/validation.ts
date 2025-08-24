@@ -15,7 +15,7 @@ export async function validationMiddleware(
     // Validate message text length
     if (ctx.message?.text && ctx.message.text.length > 4096) {
       await ctx.reply(
-        "❌ Message is too long. Maximum length is 4096 characters.",
+        "Message is too long. Maximum length is 4096 characters.",
       );
       return;
     }
@@ -23,7 +23,7 @@ export async function validationMiddleware(
     // Validate caption length for media
     if (ctx.message?.caption && ctx.message.caption.length > 1024) {
       await ctx.reply(
-        "❌ Caption is too long. Maximum length is 1024 characters.",
+        "Caption is too long. Maximum length is 1024 characters.",
       );
       return;
     }
@@ -37,7 +37,7 @@ export async function validationMiddleware(
         },
         "Callback data too long",
       );
-      await ctx.answerCallbackQuery({ text: "❌ Invalid request data" });
+      await ctx.answerCallbackQuery({ text: "Invalid request data" });
       return;
     }
 
@@ -45,7 +45,7 @@ export async function validationMiddleware(
     if (ctx.message?.text?.startsWith("/")) {
       const sanitized = sanitizeCommand(ctx.message.text);
       if (!sanitized) {
-        await ctx.reply("❌ Invalid command format.");
+        await ctx.reply("Invalid command format.");
         return;
       }
     }
@@ -69,7 +69,7 @@ export async function validationMiddleware(
       "Validation middleware error",
     );
 
-    await ctx.reply("❌ Input validation failed. Please try again.");
+    await ctx.reply("Input validation failed. Please try again.");
   }
 }
 
@@ -102,7 +102,7 @@ async function validateMediaUpload(
     if (photo.file_size && photo.file_size > maxFileSize) {
       return {
         valid: false,
-        message: "❌ Photo is too large. Maximum size is 20MB.",
+        message: "Photo is too large. Maximum size is 20MB.",
       };
     }
   }
@@ -113,7 +113,7 @@ async function validateMediaUpload(
     if (video.file_size && video.file_size > maxFileSize) {
       return {
         valid: false,
-        message: "❌ Video is too large. Maximum size is 20MB.",
+        message: "Video is too large. Maximum size is 20MB.",
       };
     }
 
@@ -122,7 +122,7 @@ async function validateMediaUpload(
       // 10 minutes max
       return {
         valid: false,
-        message: "❌ Video is too long. Maximum duration is 10 minutes.",
+        message: "Video is too long. Maximum duration is 10 minutes.",
       };
     }
   }

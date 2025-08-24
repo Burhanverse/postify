@@ -107,13 +107,13 @@ bot.catch((err) => {
       if (ctx.callbackQuery) {
         ctx
           .answerCallbackQuery({
-            text: "❌ An unexpected error occurred. Please try again.",
+            text: "An unexpected error occurred. Please try again.",
             show_alert: true,
           })
           .catch(() => {});
       } else {
         ctx
-          .reply("❌ An unexpected error occurred. Please try again later.")
+          .reply("An unexpected error occurred. Please try again later.")
           .catch(() => {});
       }
     } catch {}

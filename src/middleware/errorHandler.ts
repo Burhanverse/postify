@@ -62,13 +62,13 @@ async function handleGrammyError(ctx: BotContext, error: GrammyError) {
         return;
       }
       if (description.includes("message to edit not found")) {
-        await safeReply(ctx, "❌ Message not found. Please try again.");
+        await safeReply(ctx, "Message not found. Please try again.");
         return;
       }
       if (description.includes("chat not found")) {
         await safeReply(
           ctx,
-          "❌ Channel not found. Please check your channel settings with /checkchannels",
+          "Channel not found. Please check your channel settings with /checkchannels",
         );
         return;
       }
@@ -82,7 +82,7 @@ async function handleGrammyError(ctx: BotContext, error: GrammyError) {
       if (description.includes("not enough rights")) {
         await safeReply(
           ctx,
-          "❌ Bot doesn't have enough permissions. Please grant admin rights to the bot.",
+          "Bot doesn't have enough permissions. Please grant admin rights to the bot.",
         );
         return;
       }
@@ -100,7 +100,7 @@ async function handleGrammyError(ctx: BotContext, error: GrammyError) {
     case 503:
       await safeReply(
         ctx,
-        "🔧 Telegram is experiencing issues. Please try again in a few minutes.",
+        "Telegram is experiencing issues. Please try again in a few minutes.",
       );
       return;
   }
@@ -108,7 +108,7 @@ async function handleGrammyError(ctx: BotContext, error: GrammyError) {
   // Generic Grammy error
   await safeReply(
     ctx,
-    "❌ An error occurred while processing your request. Please try again.",
+    "An error occurred while processing your request. Please try again.",
   );
 }
 
@@ -123,7 +123,7 @@ async function handleHttpError(ctx: BotContext, error: HttpError) {
 
   await safeReply(
     ctx,
-    "🌐 Network error. Please check your connection and try again.",
+    "Network error. Please check your connection and try again.",
   );
 }
 
@@ -136,7 +136,7 @@ async function handleBotError(ctx: BotContext, error: BotError) {
     "Bot error",
   );
 
-  await safeReply(ctx, "🤖 Bot configuration error. Please contact support.");
+  await safeReply(ctx, "Bot configuration error. Please contact support.");
 }
 
 async function handleUnknownError(ctx: BotContext, error: unknown) {
@@ -151,7 +151,7 @@ async function handleUnknownError(ctx: BotContext, error: unknown) {
 
   await safeReply(
     ctx,
-    "❌ An unexpected error occurred. Please try again later.",
+    "An unexpected error occurred. Please try again later.",
   );
 }
 

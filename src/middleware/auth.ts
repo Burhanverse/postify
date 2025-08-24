@@ -6,7 +6,7 @@ export function requireChannelAccess() {
   return async (ctx: BotContext, next: () => Promise<void>) => {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return;
     }
 
@@ -14,7 +14,7 @@ export function requireChannelAccess() {
     const hasChannels = await ChannelModel.exists({ owners: userId });
     if (!hasChannels) {
       await ctx.reply(
-        "❌ No channels found. Use /addchannel to link a channel first.",
+        "No channels found. Use /addchannel to link a channel first.",
       );
       return;
     }
@@ -27,13 +27,13 @@ export function requireSelectedChannel() {
   return async (ctx: BotContext, next: () => Promise<void>) => {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return;
     }
 
     // Ensure session exists
     if (!ctx.session) {
-      await ctx.reply("❌ Session not initialized. Please try again.");
+      await ctx.reply("Session not initialized. Please try again.");
       return;
     }
 
@@ -44,7 +44,7 @@ export function requireSelectedChannel() {
       const channel = await ChannelModel.findOne({ owners: userId });
       if (!channel) {
         await ctx.reply(
-          "❌ No channels found. Use /addchannel to link a channel first.",
+          "No channels found. Use /addchannel to link a channel first.",
         );
         return;
       }
@@ -61,7 +61,7 @@ export function requireSelectedChannel() {
     if (!channel) {
       delete ctx.session.selectedChannelChatId;
       await ctx.reply(
-        "❌ Access denied to selected channel. Please select a different channel with /channels",
+        "Access denied to selected channel. Please select a different channel with /channels",
       );
       return;
     }
@@ -74,27 +74,27 @@ export function requireChannelAdmin(requiredRoles: string[] = []) {
   return async (ctx: BotContext, next: () => Promise<void>) => {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return;
     }
 
     // Ensure session exists
     if (!ctx.session) {
-      await ctx.reply("❌ Session not initialized. Please try again.");
+      await ctx.reply("Session not initialized. Please try again.");
       return;
     }
 
     const channelChatId = ctx.session.selectedChannelChatId;
     if (!channelChatId) {
       await ctx.reply(
-        "❌ No channel selected. Use /channels to select a channel first.",
+        "No channel selected. Use /channels to select a channel first.",
       );
       return;
     }
 
     const channel = await ChannelModel.findOne({ chatId: channelChatId });
     if (!channel) {
-      await ctx.reply("❌ Channel not found.");
+      await ctx.reply("Channel not found.");
       return;
     }
 
@@ -107,7 +107,7 @@ export function requireChannelAdmin(requiredRoles: string[] = []) {
     // Check if user is admin with required roles
     const admin = channel.admins?.find((admin) => admin.userId === userId);
     if (!admin) {
-      await ctx.reply("❌ Admin access required for this action.");
+      await ctx.reply("Admin access required for this action.");
       return;
     }
 
@@ -118,7 +118,7 @@ export function requireChannelAdmin(requiredRoles: string[] = []) {
       );
       if (!hasRequiredRole) {
         await ctx.reply(
-          `❌ Missing required role(s): ${requiredRoles.join(", ")}`,
+          `Missing required role(s): ${requiredRoles.join(", ")}`,
         );
         return;
       }
@@ -142,34 +142,34 @@ export function requirePostPermission() {
   return async (ctx: BotContext, next: () => Promise<void>) => {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return;
     }
 
     // Ensure session exists
     if (!ctx.session) {
-      await ctx.reply("❌ Session not initialized. Please try again.");
+      await ctx.reply("Session not initialized. Please try again.");
       return;
     }
 
     const channelChatId = ctx.session.selectedChannelChatId;
     if (!channelChatId) {
       await ctx.reply(
-        "❌ No channel selected. Use /channels to select a channel first.",
+        "No channel selected. Use /channels to select a channel first.",
       );
       return;
     }
 
     const channel = await ChannelModel.findOne({ chatId: channelChatId });
     if (!channel) {
-      await ctx.reply("❌ Channel not found.");
+      await ctx.reply("Channel not found.");
       return;
     }
 
     // Check bot permissions in the channel
     if (!channel.permissions?.canPost) {
       await ctx.reply(
-        "❌ Bot doesn't have posting permissions in this channel. Please grant admin rights to the bot.",
+        "Bot doesn't have posting permissions in this channel. Please grant admin rights to the bot.",
       );
       return;
     }
@@ -184,7 +184,7 @@ export function requirePostPermission() {
 
     if (!isOwner && !isAdmin) {
       await ctx.reply(
-        "❌ You don't have permission to create posts in this channel.",
+        "You don't have permission to create posts in this channel.",
       );
       return;
     }

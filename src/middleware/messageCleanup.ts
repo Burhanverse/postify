@@ -90,7 +90,7 @@ function getMessageType(text: string, other?: Record<string, unknown>): "schedul
   if (text.includes("Post sent successfully") || text.includes("published to")) {
     return "post_sent";
   }
-  if (other?.reply_markup && (text.includes("(empty)") || text.includes("📝") || text.includes("📤"))) {
+  if (other?.reply_markup && (text.includes("(empty)") || text.includes("Text") || text.includes("Send"))) {
     return "draft_preview";
   }
   return "general";

@@ -16,7 +16,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
   bot.command("help", async (ctx) => {
     await ctx.reply(
-      "📝 **COMMANDS**\n" +
+      "**COMMANDS**\n" +
         "/addbot - register your personal bot token\n" +
         "/mybot - view your personal bot status\n" +
         "/channels - list your channels (read-only here)\n" +
@@ -28,7 +28,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
   bot.command("addchannel", async (ctx) => {
     await ctx.reply(
-      "❌ Channel linking moved to your personal bot. Use /addbot first, then open your personal bot and run /addchannel there.",
+      "Channel linking moved to your personal bot. Use /addbot first, then open your personal bot and run /addchannel there.",
     );
   });
 
@@ -46,7 +46,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       return;
     }
     await ctx.reply(
-      `🤖 Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`,
+      `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`,
     );
   });
 
@@ -83,7 +83,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       if (!ub) return ctx.reply("Already removed.");
       await UserBotModel.deleteOne({ botId: ub.botId });
       await ctx.reply(
-        "✅ Personal bot unlinked. You can /addbot again anytime.",
+        "Personal bot unlinked. You can /addbot again anytime.",
       );
       return;
     }
@@ -92,7 +92,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       const token = ctx.message.text.trim();
       ctx.session.awaitingBotToken = false;
       if (!validateBotTokenFormat(token)) {
-        await ctx.reply("❌ Invalid token format. Aborted.");
+        await ctx.reply("Invalid token format. Aborted.");
         return;
       }
       try {
@@ -101,7 +101,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
         if (!me.is_bot) throw new Error("Not a bot account");
         const existing = await UserBotModel.findOne({ botId: me.id });
         if (existing && existing.ownerTgId !== ctx.from?.id) {
-          await ctx.reply("❌ This bot is already registered by another user.");
+          await ctx.reply("This bot is already registered by another user.");
           return;
         }
         const lastFour = token.slice(-4);
@@ -124,7 +124,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
           { upsert: true, new: true },
         );
         await ctx.reply(
-          `✅ Personal bot registered: @${record.username}.\nAdd this bot to your channels as admin, then open it and use /addchannel there to link channels. Use /mybot to view status.`,
+          `Personal bot registered: @${record.username}.\nAdd this bot to your channels as admin, then open it and use /addchannel there to link channels. Use /mybot to view status.`,
         );
         getOrCreateUserBot(record.botId).catch((err) =>
           logger.error(
@@ -135,7 +135,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       } catch (err) {
         logger.warn({ err }, "Failed to validate bot token");
         await ctx.reply(
-          "❌ Failed to validate token with Telegram. Make sure it's correct and the bot is not banned.",
+          "Failed to validate token with Telegram. Make sure it's correct and the bot is not banned.",
         );
       }
       return;
@@ -150,23 +150,23 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       return;
     }
 
-    let response = "🔍 **Channel Status Check:**\n\n";
+    let response = "**Channel Status Check:**\n\n";
     for (const channel of channels) {
       const channelName =
         channel.title || channel.username || channel.chatId.toString();
       if (!channel.botId) {
-        response += `**${channelName}**\nStatus: ❌ Not migrated (no personal bot)\nID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: Not migrated (no personal bot)\nID: \`${channel.chatId}\`\n\n`;
         continue;
       }
       try {
-        response += `**${channelName}**\nStatus: ⏳ Pending verification via personal bot\nID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: Pending verification via personal bot\nID: \`${channel.chatId}\`\n\n`;
       } catch (error) {
-        response += `**${channelName}**\nStatus: ❌ Error\nID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: Error\nID: \`${channel.chatId}\`\n\n`;
       }
     }
 
     response +=
-      "💡 *Use your personal bot to /addchannel again if status shows Not migrated*";
+      "*Use your personal bot to /addchannel again if status shows Not migrated*";
     await ctx.reply(response, { parse_mode: "Markdown" });
   });
 

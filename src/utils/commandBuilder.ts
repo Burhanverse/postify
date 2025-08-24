@@ -42,7 +42,7 @@ export function createProtectedCommand(
       // Send user-friendly error message
       try {
         await ctx.reply(
-          `❌ The /${command} command failed. Please try again later.`,
+          `The /${command} command failed. Please try again later.`,
         );
       } catch (replyError) {
         logger.error(
@@ -101,7 +101,7 @@ export function createProtectedCallback(
       // Send user-friendly error message
       try {
         await ctx.answerCallbackQuery({
-          text: "❌ Action failed. Please try again.",
+          text: "Action failed. Please try again.",
           show_alert: true,
         });
       } catch (replyError) {

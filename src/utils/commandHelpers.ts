@@ -7,7 +7,7 @@ export async function safeCommandExecution<T>(
   ctx: BotContext,
   operation: () => Promise<T>,
   operationName: string,
-  fallbackMessage = "❌ Operation failed. Please try again.",
+  fallbackMessage = "Operation failed. Please try again.",
 ): Promise<T | null> {
   try {
     return await operation();
@@ -63,7 +63,7 @@ export async function safeDraftOperation(
 
       if (!validation.valid) {
         await ctx.reply(
-          `❌ Draft validation failed:\n${validation.errors.join("\n")}`,
+          `Draft validation failed:\n${validation.errors.join("\n")}`,
         );
         return false;
       }
@@ -87,7 +87,7 @@ export async function safeDraftOperation(
 
     try {
       await ctx.reply(
-        "❌ Draft operation failed. Draft has been cleared. Please start over with /newpost",
+        "Draft operation failed. Draft has been cleared. Please start over with /newpost",
       );
     } catch (replyError) {
       logger.error(
@@ -115,7 +115,7 @@ export function wrapCommand(
       ctx,
       () => commandHandler(ctx),
       commandName,
-      `❌ ${commandName} command failed. Please try again.`,
+      `${commandName} command failed. Please try again.`,
     );
   };
 }
@@ -129,7 +129,7 @@ export function wrapCallbackHandler(
       ctx,
       () => callbackHandler(ctx),
       `callback:${handlerName}`,
-      "❌ Action failed. Please try again.",
+      "Action failed. Please try again.",
     );
   };
 }
@@ -141,7 +141,7 @@ export async function validateChannelAccess(
   try {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply("❌ Authentication required.");
+      await ctx.reply("Authentication required.");
       return false;
     }
 
@@ -153,7 +153,7 @@ export async function validateChannelAccess(
 
     if (!channel) {
       await ctx.reply(
-        "❌ You don't have access to this channel. Use /channels to select an available channel.",
+        "You don't have access to this channel. Use /channels to select an available channel.",
       );
       return false;
     }
@@ -169,7 +169,7 @@ export async function validateChannelAccess(
       "Channel access validation failed",
     );
 
-    await ctx.reply("❌ Failed to validate channel access. Please try again.");
+    await ctx.reply("Failed to validate channel access. Please try again.");
     return false;
   }
 }
