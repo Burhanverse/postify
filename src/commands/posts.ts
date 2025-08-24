@@ -214,7 +214,18 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     await ctx.reply(
-      "Send button in format: Text | URL (or) Text | CALLBACK:some_key",
+      "**Add Button(s)**\n\n" +
+        "Send your button(s) in this format:\n" +
+        "• `Button Text | https://example.com` for URL buttons\n" +
+        "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
+        "**Single button:** `Visit Website | https://google.com`\n" +
+        "**Multiple buttons (one per line):**\n" +
+        "```\n" +
+        "Visit Website | https://google.com\n" +
+        "Contact Us | https://contact.example.com\n" +
+        "Call Now | CALLBACK:call_action\n" +
+        "```",
+      { parse_mode: "Markdown" },
     );
     (ctx.session as Record<string, unknown>).awaitingButton = true;
   });
@@ -306,36 +317,56 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       (ctx.session as Record<string, unknown>).awaitingButton &&
       ctx.session.draft
     ) {
-      const line = ctx.message.text.trim();
-      const parts = line.split("|").map((p) => p.trim());
-      if (parts.length >= 2) {
-        const text = parts[0];
-        const target = parts.slice(1).join("|");
-        if (/^https?:\/\//i.test(target)) {
-          ctx.session.draft.buttons?.push({ text, url: target });
-          await ctx.reply(
-            `**URL button added**\n\nButton: "${text}"\nURL: ${target}`,
-            { parse_mode: "Markdown" },
-          );
-        } else if (/^CALLBACK:/i.test(target)) {
-          const key = target.split(":")[1];
-          ctx.session.draft.buttons?.push({ text, callbackData: key });
-          await ctx.reply(
-            `**Callback button added**\n\nButton: "${text}"\nCallback: ${key}`,
-            { parse_mode: "Markdown" },
-          );
+      const text = ctx.message.text.trim();
+      const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+      
+      let addedButtons: string[] = [];
+      let errors: string[] = [];
+      
+      for (const line of lines) {
+        const parts = line.split("|").map((p) => p.trim());
+        if (parts.length >= 2) {
+          const buttonText = parts[0];
+          const target = parts.slice(1).join("|");
+          
+          if (/^https?:\/\//i.test(target)) {
+            ctx.session.draft.buttons?.push({ text: buttonText, url: target });
+            addedButtons.push(`"${buttonText}" (URL)`);
+          } else if (/^CALLBACK:/i.test(target)) {
+            const key = target.split(":")[1];
+            ctx.session.draft.buttons?.push({ text: buttonText, callbackData: key });
+            addedButtons.push(`"${buttonText}" (Callback)`);
+          } else {
+            errors.push(`Invalid target for "${buttonText}": ${target}`);
+          }
         } else {
-          await ctx.reply(
-            "**Unrecognized button format**\n\nUse URL format: `Button Text | https://example.com`\nOr callback format: `Button Text | CALLBACK:key`",
-            { parse_mode: "Markdown" },
-          );
+          errors.push(`Invalid format: ${line}`);
         }
-      } else {
-        await ctx.reply(
-          "**Invalid format**\n\nUse: `Button Text | URL` or `Button Text | CALLBACK:key`",
-          { parse_mode: "Markdown" },
-        );
       }
+      
+      let responseMessage = "";
+      
+      if (addedButtons.length > 0) {
+        responseMessage += `**${addedButtons.length} button(s) added successfully**\n\n`;
+        responseMessage += addedButtons.map(btn => `• ${btn}`).join('\n');
+      }
+      
+      if (errors.length > 0) {
+        if (responseMessage) responseMessage += "\n\n";
+        responseMessage += `**${errors.length} error(s) encountered:**\n\n`;
+        responseMessage += errors.map(err => `• ${err}`).join('\n');
+        responseMessage += "\n\n**Format reminder:**\n";
+        responseMessage += "• `Button Text | https://example.com` for URL buttons\n";
+        responseMessage += "• `Button Text | CALLBACK:key` for callback buttons";
+      }
+      
+      if (!responseMessage) {
+        responseMessage = "**No valid buttons found**\n\nPlease use the correct format:\n";
+        responseMessage += "• `Button Text | https://example.com` for URL buttons\n";
+        responseMessage += "• `Button Text | CALLBACK:key` for callback buttons";
+      }
+      
+      await ctx.reply(responseMessage, { parse_mode: "Markdown" });
       delete (ctx.session as Record<string, unknown>).awaitingButton;
       return;
     }
@@ -557,11 +588,17 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       (ctx.session as Record<string, unknown>).awaitingButton = true;
       await ctx.answerCallbackQuery();
       await ctx.reply(
-        "**Add Button**\n\n" +
-          "Send your button in this format:\n" +
+        "**Add Button(s)**\n\n" +
+          "Send your button(s) in this format:\n" +
           "• `Button Text | https://example.com` for URL buttons\n" +
           "• `Button Text | CALLBACK:custom_key` for callback buttons\n\n" +
-          "**Example:** `Visit Website | https://google.com`",
+          "**Single button:** `Visit Website | https://google.com`\n" +
+          "**Multiple buttons (one per line):**\n" +
+          "```\n" +
+          "Visit Website | https://google.com\n" +
+          "Contact Us | https://contact.example.com\n" +
+          "Call Now | CALLBACK:call_action\n" +
+          "```",
         { parse_mode: "Markdown" },
       );
       return;
