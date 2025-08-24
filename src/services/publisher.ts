@@ -87,6 +87,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   const sendOptions = {
     reply_markup: hasButtons ? keyboard : undefined,
     parse_mode: "HTML" as const,
+    disable_web_page_preview: true,
   };
 
   let sent;

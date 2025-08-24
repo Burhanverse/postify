@@ -32,16 +32,24 @@ export async function messageCleanupMiddleware(
   const originalReplyWithPhoto = ctx.replyWithPhoto?.bind(ctx);
   const originalReplyWithVideo = ctx.replyWithVideo?.bind(ctx);
 
-  // Override reply methods to track sent messages
+  // Override reply methods to track sent messages and disable link previews
   ctx.reply = async (text: string, other?: Record<string, unknown>) => {
-    const sent = await originalReply(text, other);
+    const options = { 
+      ...other, 
+      disable_web_page_preview: true 
+    } as Parameters<typeof originalReply>[1];
+    const sent = await originalReply(text, options);
     trackBotMessage(ctx, sent.message_id, getMessageType(text, other));
     return sent;
   };
 
   if (ctx.replyWithPhoto) {
     ctx.replyWithPhoto = async (photo: string, other?: Record<string, unknown>) => {
-      const sent = await originalReplyWithPhoto!(photo, other);
+      const options = { 
+        ...other, 
+        disable_web_page_preview: true 
+      } as Parameters<typeof originalReplyWithPhoto>[1];
+      const sent = await originalReplyWithPhoto!(photo, options);
       trackBotMessage(ctx, sent.message_id, "draft_preview");
       return sent;
     };
@@ -49,7 +57,11 @@ export async function messageCleanupMiddleware(
 
   if (ctx.replyWithVideo) {
     ctx.replyWithVideo = async (video: string, other?: Record<string, unknown>) => {
-      const sent = await originalReplyWithVideo!(video, other);
+      const options = { 
+        ...other, 
+        disable_web_page_preview: true 
+      } as Parameters<typeof originalReplyWithVideo>[1];
+      const sent = await originalReplyWithVideo!(video, options);
       trackBotMessage(ctx, sent.message_id, "draft_preview");
       return sent;
     };
