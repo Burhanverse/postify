@@ -68,13 +68,18 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
       text?: string | null;
       url?: string | null;
       callbackData?: string | null;
-    }) => {
+    }, index: number) => {
       if (b.url && b.text) {
         keyboard.url(b.text, b.url);
         hasButtons = true;
       } else if (b.callbackData && b.text) {
         keyboard.text(b.text, `btn:${post._id.toString()}:${b.callbackData}`);
         hasButtons = true;
+      }
+      
+      // Add row break after every 2 buttons
+      if ((index + 1) % 2 === 0) {
+        keyboard.row();
       }
     },
   );
