@@ -1,6 +1,7 @@
 import { Bot, session } from "grammy";
 import { logger } from "../utils/logger";
 import { UserBotModel } from "../models/UserBot";
+import { ChannelModel } from "../models/Channel";
 import type { BotContext, SessionData } from "../telegram/bot";
 import { loggingMiddleware } from "../middleware/logging";
 import { errorHandlerMiddleware } from "../middleware/errorHandler";
@@ -64,6 +65,52 @@ export async function getOrCreateUserBot(botId: number) {
   registerPostCommands(bot);
   registerChannelsCommands(bot, { enableLinking: true });
 
+  // Check channels command - moved from core to personal bot
+  bot.command("checkchannels", async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) {
+      await ctx.reply("Authentication required.");
+      return;
+    }
+
+    const channels = await ChannelModel.find({ 
+      owners: userId,
+      botId: record.botId 
+    });
+    
+    if (!channels.length) {
+      await ctx.reply(
+        "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    let response = "**Channel Status Check:**\n\n";
+    
+    for (const channel of channels) {
+      const channelName = channel.title || channel.username || channel.chatId.toString();
+      
+      try {
+        // Test if bot can send to the channel
+        const chatMember = await bot.api.getChatMember(channel.chatId, record.botId);
+        const canPost = chatMember.status === "administrator" && 
+                       (chatMember.can_post_messages === true || chatMember.can_post_messages === undefined);
+        
+        if (canPost) {
+          response += `**${channelName}**\nStatus: ✅ Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
+        } else {
+          response += `**${channelName}**\nStatus: ⚠️ Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
+        }
+      } catch (error) {
+        response += `**${channelName}**\nStatus: ❌ Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+      }
+    }
+
+    response += "*Tip: Re-add this bot as admin to channels showing errors*";
+    await ctx.reply(response, { parse_mode: "Markdown" });
+  });
+
   bot.on("callback_query:data", async (ctx, next) => {
     if (await handleChannelCallback(ctx)) return; // handled
     return next();
@@ -75,6 +122,7 @@ export async function getOrCreateUserBot(botId: number) {
       { command: "queue", description: "View scheduled posts" },
       { command: "addchannel", description: "Link a channel to this bot" },
       { command: "channels", description: "List linked channels" },
+      { command: "checkchannels", description: "Verify channel permissions" },
       { command: "schedule", description: "(Use buttons)" },
       { command: "cancel", description: "Cancel current draft" },
     ])

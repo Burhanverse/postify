@@ -19,9 +19,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       "**COMMANDS**\n" +
         "/addbot - register your personal bot token\n" +
         "/mybot - view your personal bot status\n" +
-        "/channels - list your channels (read-only here)\n" +
-        "/checkchannels - verify personal bot posting permissions\n" +
-        "(Channel linking & posting happens via your personal bot instance)\n",
+        "(Channel management happens via your personal bot instance)\n",
       { parse_mode: "Markdown" },
     );
   });
@@ -65,7 +63,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     if (!ub) return ctx.reply("No personal bot to unlink.");
     ctx.session.awaitingUnlinkBotConfirm = true;
     await ctx.reply(
-      "Type CONFIRM UNLINK to remove your personal bot (cannot be undone).",
+      "Type ```CONFIRM UNLINK``` to remove your personal bot (cannot be undone).",
       {},
     );
   });
@@ -143,33 +141,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     return next();
   });
 
-  bot.command("checkchannels", async (ctx) => {
-    const channels = await ChannelModel.find({ owners: ctx.from?.id });
-    if (!channels.length) {
-      await ctx.reply("No channels linked. (Link them via your personal bot)");
-      return;
-    }
-
-    let response = "**Channel Status Check:**\n\n";
-    for (const channel of channels) {
-      const channelName =
-        channel.title || channel.username || channel.chatId.toString();
-      if (!channel.botId) {
-        response += `**${channelName}**\nStatus: Not migrated (no personal bot)\nID: \`${channel.chatId}\`\n\n`;
-        continue;
-      }
-      try {
-        response += `**${channelName}**\nStatus: Pending verification via personal bot\nID: \`${channel.chatId}\`\n\n`;
-      } catch (error) {
-        response += `**${channelName}**\nStatus: Error\nID: \`${channel.chatId}\`\n\n`;
-      }
-    }
-
-    response +=
-      "*Use your personal bot to /addchannel again if status shows Not migrated*";
-    await ctx.reply(response, { parse_mode: "Markdown" });
-  });
-
   bot.command("migratechannels", async (ctx) => {
     const legacy = await ChannelModel.find({
       $or: [{ botId: { $exists: false } }, { botId: null }],
@@ -196,8 +167,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       { command: "mybot", description: "Show personal bot status" },
       { command: "botstatus", description: "Personal bot health" },
       { command: "unlinkbot", description: "Remove personal bot" },
-      { command: "channels", description: "List connected channels" },
-      { command: "checkchannels", description: "Verify channel permissions" },
       { command: "migratechannels", description: "List legacy channels" },
     ])
     .catch((err) => logger.error({ err }, "setMyCommands failed"));

@@ -68,7 +68,7 @@ async function handleGrammyError(ctx: BotContext, error: GrammyError) {
       if (description.includes("chat not found")) {
         await safeReply(
           ctx,
-          "Channel not found. Please check your channel settings with /checkchannels",
+          "Channel not found. Please check your channel settings with /checkchannels in your personal bot",
         );
         return;
       }
