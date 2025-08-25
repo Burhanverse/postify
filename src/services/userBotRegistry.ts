@@ -98,12 +98,12 @@ export async function getOrCreateUserBot(botId: number) {
                        (chatMember.can_post_messages === true || chatMember.can_post_messages === undefined);
         
         if (canPost) {
-          response += `**${channelName}**\nStatus: ✅ Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
+          response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
         } else {
-          response += `**${channelName}**\nStatus: ⚠️ Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
+          response += `**${channelName}**\nStatus: Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
         }
       } catch (error) {
-        response += `**${channelName}**\nStatus: ❌ Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+        response += `**${channelName}**\nStatus: Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
       }
     }
 

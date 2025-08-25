@@ -190,7 +190,7 @@ Actions:
 
 - `🕐 Custom` – enter relative (`in 45m`), absolute (`2025-12-25 14:30`), or natural (`next monday 10:00`).
 - `🌐 TZ: <YourTZ>` – open timezone picker (paged common IANA zones). Your choice is stored.
-- `❌ Cancel` – return to draft controls without scheduling.
+- `Cancel` – return to draft controls without scheduling.
 
 ### Timezones & Preferences
 
