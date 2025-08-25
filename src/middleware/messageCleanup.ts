@@ -79,6 +79,9 @@ function isProtectedCallback(ctx: BotContext): boolean {
   
   // Protect draft preview callbacks (don't cleanup when user interacts with draft)
   if (data.startsWith("draft:") && !data.includes("preview")) return true;
+
+  // Protect newpost channel selection callbacks
+  if (data.startsWith("newpost:select:")) return true;
   
   return false;
 }
