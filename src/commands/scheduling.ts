@@ -250,7 +250,9 @@ async function showSchedulingOptions(ctx: BotContext): Promise<void> {
 
 // Timezone selection submenu (paged minimal list of common timezones)
 function timezoneKeyboard(page = 0): InlineKeyboard {
-  const commonTzs = [
+  // Prefer runtime-provided list of IANA time zones when available (Node 18+)
+  // This lets us show the full set of regions without hardcoding hundreds of entries.
+  const fallback = [
     "UTC",
     "Europe/London",
     "Europe/Berlin",
@@ -266,24 +268,32 @@ function timezoneKeyboard(page = 0): InlineKeyboard {
     "America/Los_Angeles",
     "America/Sao_Paulo",
   ];
-  const perPage = 6;
+
+  // Type-safe check for Intl.supportedValuesOf
+  type IntlWithSupported = typeof Intl & {
+    supportedValuesOf?: (type: string) => string[];
+  };
+  const allTzs: string[] =
+    typeof Intl !== "undefined" && (Intl as IntlWithSupported).supportedValuesOf
+      ? (Intl as IntlWithSupported).supportedValuesOf!("timeZone")
+      : fallback;
+
+  // Ensure deterministic unique entries, then sort by display label (after last '/')
+  const unique = Array.from(new Set(allTzs));
+  const labeled = unique.map((tz) => ({ tz, label: tz.includes("/") ? tz.split("/").pop()! : tz }));
+  labeled.sort((a, b) => a.label.localeCompare(b.label));
+
+  const perPage = 12;
   const start = page * perPage;
-  const slice = commonTzs.slice(start, start + perPage);
+  const slice = labeled.slice(start, start + perPage);
   const kb = new InlineKeyboard();
-  slice.forEach((tz) =>
-    kb.text(tz.replace(/.*\//, ""), `schedule_tz_set:${tz}`).row(),
-  );
-  if (commonTzs.length > perPage) {
-    const maxPage = Math.floor((commonTzs.length - 1) / perPage);
-    kb.text(
-      page > 0 ? "Prev" : "·",
-      `schedule_tz_page:${Math.max(page - 1, 0)}`,
-    )
+  slice.forEach((entry) => kb.text(entry.label, `schedule_tz_set:${entry.tz}`).row());
+  const total = unique.length;
+  if (total > perPage) {
+    const maxPage = Math.floor((total - 1) / perPage);
+    kb.text(page > 0 ? "Prev" : "·", `schedule_tz_page:${Math.max(page - 1, 0)}`)
       .text("Cancel", "schedule_cancel")
-      .text(
-        page < maxPage ? "Next" : "·",
-        `schedule_tz_page:${Math.min(page + 1, maxPage)}`,
-      )
+      .text(page < maxPage ? "Next" : "·", `schedule_tz_page:${Math.min(page + 1, maxPage)}`)
       .row();
   } else {
     kb.text("Cancel", "schedule_cancel").row();
