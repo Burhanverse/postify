@@ -28,6 +28,71 @@ import { logger } from "../utils/logger";
 type DraftButton = { text: string; url?: string; callbackData?: string };
 
 export function registerPostCommands(bot: Bot<BotContext>) {
+  // Handle queue channel selection callback
+  bot.on('callback_query:data', async (ctx, next) => {
+    const data = ctx.callbackQuery.data;
+    if (data?.startsWith('queue:select:')) {
+      await ctx.answerCallbackQuery();
+      const chatId = data.split(':')[2];
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply('Authentication required.');
+        return;
+      }
+      const channels = await getUserChannels(userId);
+      const selected = channels.find((c) => String(c.chatId) === chatId);
+      if (!selected) {
+        await ctx.reply('Channel not found or not linked.');
+        return;
+      }
+      const channelId = selected._id.toString();
+      const result = await postScheduler.getScheduledPosts({
+        userId,
+        channelId,
+        limit: 15,
+        sortBy: 'scheduledAt',
+        sortOrder: 'asc',
+      });
+      if (result.posts.length === 0) {
+        await ctx.reply(
+          '**Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.',
+          { parse_mode: 'Markdown' },
+        );
+        return;
+      }
+      const channelName = selected.title || selected.username || selected.chatId || 'Unknown';
+      let response = `**Scheduled Posts for ${channelName}**\n`;
+      response += `(${result.total} total scheduled)\n\n`;
+      result.posts.forEach((post, index) => {
+        const scheduledTime = DateTime.fromJSDate(post.scheduledAt!);
+        const timeDisplay = scheduledTime.toFormat('MMM dd, HH:mm');
+        const relativeTime = scheduledTime.toRelative();
+        const preview = post.text
+          ? post.text.length > 50
+            ? post.text.substring(0, 50) + '...'
+            : post.text
+          : `${post.type} post`;
+        response += `${index + 1}. **${preview}**\n`;
+        response += `   ${timeDisplay} UTC (${relativeTime})\n`;
+        response += `   ID: \`${post._id.toString()}\`\n\n`;
+      });
+      if (result.hasMore) {
+        response += `_Showing first ${result.posts.length} posts. Use pagination for more._`;
+      }
+      const keyboard = new InlineKeyboard()
+        .text('Refresh', 'queue_refresh')
+        .text('Stats', 'queue_stats')
+        .row()
+        .text('New Post', 'new_post_quick')
+        .text('Close', 'close_message');
+      await ctx.reply(response, {
+        reply_markup: keyboard,
+        parse_mode: 'Markdown',
+      });
+      return;
+    }
+    return next();
+  });
   async function renderDraftPreview(ctx: BotContext) {
     const d = ctx.session.draft;
     if (!d) return;
@@ -986,29 +1051,38 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
 
     try {
-      // Get user's selected channel or first available channel
-      let channelId: string | undefined;
+      // Get all channels for the user
+      const channels = await getUserChannels(userId);
 
-      if (ctx.session?.selectedChannelChatId) {
-        const channel = await ChannelModel.findOne({
-          chatId: ctx.session.selectedChannelChatId,
-          owners: userId,
-        });
-        if (channel) {
-          channelId = channel._id.toString();
-        }
+      if (!channels.length) {
+        await ctx.reply(
+          "**No channels found**\n\nUse /addchannel to link a channel first.",
+          { parse_mode: "Markdown" },
+        );
+        return;
       }
 
-      if (!channelId) {
-        const channel = await ChannelModel.findOne({ owners: userId });
-        if (!channel) {
-          await ctx.reply(
-            "**No channels found**\n\nUse /addchannel to link a channel first.",
-            { parse_mode: "Markdown" },
-          );
-          return;
-        }
-        channelId = channel._id.toString();
+
+      let channelId: string | undefined;
+      if (channels.length === 1) {
+        channelId = channels[0]._id.toString();
+      } else {
+        // Always prompt for selection if multiple channels
+        const keyboard = new InlineKeyboard();
+        channels.forEach((channel) => {
+          const displayName =
+            channel.title ||
+            (channel.username
+              ? `@${channel.username}`
+              : `Channel ${channel.chatId}`);
+          keyboard.text(displayName, `queue:select:${channel.chatId}`).row();
+        });
+        keyboard.text("Cancel", "queue:cancel");
+        await ctx.reply(
+          "**Select a channel to view its queue:**",
+          { reply_markup: keyboard, parse_mode: "Markdown" },
+        );
+        return;
       }
 
       // Get scheduled posts using the enhanced scheduler
@@ -1029,7 +1103,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       }
 
       // Build response with enhanced formatting
-      const channel = await ChannelModel.findById(channelId);
+      const channel = channels.find((c) => c._id.toString() === channelId);
       const channelName =
         channel?.title || channel?.username || channel?.chatId || "Unknown";
 
