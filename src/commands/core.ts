@@ -83,20 +83,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       );
       return;
     }
-  bot.on("callback_query:data", async (ctx) => {
-    if (ctx.callbackQuery.data === "cancel_unlinkbot") {
-      ctx.session.awaitingUnlinkBotConfirm = false;
-      await ctx.answerCallbackQuery({ text: "Unlink canceled." });
-      if (ctx.callbackQuery.message) {
-        try {
-          await ctx.api.deleteMessage(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id);
-        } catch (err) {
-          logger.warn({ err }, "Failed to delete unlink confirmation message");
-        }
-      }
-      await ctx.reply("Unlink canceled.");
-    }
-  });
 
     if (ctx.session.awaitingBotToken && ctx.message?.text) {
       const token = ctx.message.text.trim();
@@ -151,6 +137,21 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       return;
     }
     return next();
+  });
+
+  bot.on("callback_query:data", async (ctx) => {
+    if (ctx.callbackQuery.data === "cancel_unlinkbot") {
+      ctx.session.awaitingUnlinkBotConfirm = false;
+      await ctx.answerCallbackQuery({ text: "Unlink canceled." });
+      if (ctx.callbackQuery.message) {
+        try {
+          await ctx.api.deleteMessage(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id);
+        } catch (err) {
+          logger.warn({ err }, "Failed to delete unlink confirmation message");
+        }
+      }
+      await ctx.reply("Unlink canceled.");
+    }
   });
 
   bot.command("migratechannels", async (ctx) => {

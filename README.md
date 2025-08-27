@@ -16,7 +16,7 @@ A Telegram channel management & scheduling bot built with TypeScript, grammy, Mo
 | Queues (scheduled list)               | Testing                 |
 | Send/Schedule & Pin the post          | Planned                 |
 | Group Topic Support                   | Planned                 |
-| Link personal bot                     | Implemented (per-user)  |
+| Link personal bot                     | BROKEN                  |
 
 ## Roadmap (Upcoming Ideas)
 
