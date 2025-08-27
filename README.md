@@ -20,7 +20,6 @@ A Telegram channel management & scheduling bot built with TypeScript, grammy, Mo
 
 ## Roadmap (Upcoming Ideas)
 
-- Improve schedule funtion to support sending the scheduled content at any time by selecting it from the queue list.
 - Extend timezones to include more regions.
 - Add support for pinning the content after being posted.
 - Improve text formating of the response messages.

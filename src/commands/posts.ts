@@ -30,7 +30,79 @@ type DraftButton = { text: string; url?: string; callbackData?: string };
 export function registerPostCommands(bot: Bot<BotContext>) {
   // Handle queue channel selection callback
   bot.on('callback_query:data', async (ctx, next) => {
-    const data = ctx.callbackQuery.data;
+  const data = ctx.callbackQuery?.data;
+  // Handle Send Now for scheduled post
+  if (data?.startsWith('queue_sendnow:')) {
+      await ctx.answerCallbackQuery();
+      const postId = data.split(':')[1];
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply('Authentication required.');
+        return;
+      }
+      // Find the post and check ownership
+      const post = await PostModel.findById(postId);
+      if (!post) {
+        await ctx.reply('Scheduled post not found.');
+        return;
+      }
+      // Check if user owns the channel
+      const channel = await ChannelModel.findById(post.channel);
+      if (!channel || !channel.owners.includes(userId)) {
+        await ctx.reply('You do not have permission to send this post.');
+        return;
+      }
+      // Only allow if post is scheduled
+      if (post.status !== 'scheduled') {
+        await ctx.reply('Post is not scheduled or already sent.');
+        return;
+      }
+      // Publish immediately
+      try {
+        const { publishPost } = await import('../services/publisher');
+        await publishPost(post);
+        post.status = 'published';
+        post.publishedAt = new Date();
+        await post.save();
+        await ctx.reply('Posted successfully.');
+      } catch (err) {
+        await ctx.reply('Failed to send post: ' + (err instanceof Error ? err.message : String(err)));
+      }
+      return;
+    }
+
+    // Handle Cancel for scheduled post
+    if (data?.startsWith('queue_cancel:')) {
+      await ctx.answerCallbackQuery();
+      const postId = data.split(':')[1];
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply('Authentication required.');
+        return;
+      }
+      // Find the post and check ownership
+      const post = await PostModel.findById(postId);
+      if (!post) {
+        await ctx.reply('Scheduled post not found.');
+        return;
+      }
+      // Check if user owns the channel
+      const channel = await ChannelModel.findById(post.channel);
+      if (!channel || !channel.owners.includes(userId)) {
+        await ctx.reply('You do not have permission to cancel this post.');
+        return;
+      }
+      // Only allow if post is scheduled
+      if (post.status !== 'scheduled') {
+        await ctx.reply('Post is not scheduled or already sent.');
+        return;
+      }
+      // Remove the post
+      await PostModel.deleteOne({ _id: postId });
+      await ctx.reply('Cancelled scheduled post.');
+      return;
+    }
+  // ...existing code...
     if (data?.startsWith('queue:select:')) {
       await ctx.answerCallbackQuery();
       const chatId = data.split(':')[2];
@@ -79,12 +151,15 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       if (result.hasMore) {
         response += `_Showing first ${result.posts.length} posts. Use pagination for more._`;
       }
-      const keyboard = new InlineKeyboard()
-        .text('Refresh', 'queue_refresh')
-        .text('Stats', 'queue_stats')
-        .row()
-        .text('New Post', 'new_post_quick')
-        .text('Close', 'close_message');
+      // Build keyboard: New Post first, then Send Now/Cancel for each post, then Close
+      const keyboard = new InlineKeyboard();
+      keyboard.text('New Post', 'new_post_quick').row();
+      result.posts.forEach((post) => {
+        keyboard.text('Send Now', `queue_sendnow:${post._id.toString()}`)
+          .text('Cancel', `queue_cancel:${post._id.toString()}`)
+          .row();
+      });
+      keyboard.text('Close', 'close_message');
       await ctx.reply(response, {
         reply_markup: keyboard,
         parse_mode: 'Markdown',
@@ -1130,14 +1205,15 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         response += `_Showing first ${result.posts.length} posts. Use pagination for more._`;
       }
 
-      // Add interactive buttons
-      const keyboard = new InlineKeyboard()
-        .text("Refresh", "queue_refresh")
-        .text("Stats", "queue_stats")
-        .row()
-        .text("New Post", "new_post_quick")
-        .text("Close", "close_message");
-
+      // Build keyboard: New Post first, then Send Now/Cancel for each post, then Close
+      const keyboard = new InlineKeyboard();
+      keyboard.text("New Post", "new_post_quick").row();
+      result.posts.forEach((post) => {
+        keyboard.text("Send Now", `queue_sendnow:${post._id.toString()}`)
+          .text("Cancel", `queue_cancel:${post._id.toString()}`)
+          .row();
+      });
+      keyboard.text("Close", "close_message");
       await ctx.reply(response, {
         reply_markup: keyboard,
         parse_mode: "Markdown",
