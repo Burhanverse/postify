@@ -25,6 +25,10 @@ interface ActiveBotMeta {
 
 const activeBots = new Map<number, ActiveBotMeta>();
 
+// Track bots that are currently being created to avoid races that would
+// spawn multiple Bot instances for the same token (causes Telegram 409).
+const creatingBots = new Map<number, Promise<Bot<BotContext>>>();
+
 // Ownership guard middleware
 function personalBotOwnershipGuard(ownerId: number) {
   return async (ctx: BotContext, next: () => Promise<void>) => {
@@ -42,124 +46,140 @@ function initial(): SessionData {
 export async function getOrCreateUserBot(botId: number) {
   const existing = activeBots.get(botId);
   if (existing) return existing.bot;
-  const record = await UserBotModel.findOne({ botId, status: "active" });
-  if (!record) throw new Error("User bot not found or inactive");
-  const rawToken = record.tokenEncrypted
-    ? decrypt(record.tokenEncrypted)
-    : record.token;
-  if (!rawToken) throw new Error("Bot token missing (migration required)");
-  const bot = new Bot<BotContext>(rawToken);
 
-  // Ownership guard FIRST
-  bot.use(personalBotOwnershipGuard(record.ownerTgId));
-  bot.use(loggingMiddleware);
-  bot.use(errorHandlerMiddleware);
-  bot.use(session({ initial }));
-  bot.use(validationMiddleware);
-  bot.use(rateLimitMiddleware);
-  bot.use(concurrencyMiddleware);
-  bot.use(userMiddleware);
-  bot.use(sessionCleanupMiddleware);
-  bot.use(messageCleanupMiddleware);
+  // If creation is in-flight for the same botId, wait for it instead of
+  // creating another Bot instance which would cause a Telegram 409 error.
+  const inFlight = creatingBots.get(botId);
+  if (inFlight) return inFlight;
 
-  registerPostCommands(bot);
-  registerChannelsCommands(bot, { enableLinking: true });
+  const creation = (async () => {
+    const record = await UserBotModel.findOne({ botId, status: "active" });
+    if (!record) throw new Error("User bot not found or inactive");
+    const rawToken = record.tokenEncrypted
+      ? decrypt(record.tokenEncrypted)
+      : record.token;
+    if (!rawToken) throw new Error("Bot token missing (migration required)");
+    const bot = new Bot<BotContext>(rawToken);
 
-  // Check channels command - moved from core to personal bot
-  bot.command("checkchannels", async (ctx) => {
-    const userId = ctx.from?.id;
-    if (!userId) {
-      await ctx.reply("Authentication required.");
-      return;
-    }
+    // Ownership guard FIRST
+    bot.use(personalBotOwnershipGuard(record.ownerTgId));
+    bot.use(loggingMiddleware);
+    bot.use(errorHandlerMiddleware);
+    bot.use(session({ initial }));
+    bot.use(validationMiddleware);
+    bot.use(rateLimitMiddleware);
+    bot.use(concurrencyMiddleware);
+    bot.use(userMiddleware);
+    bot.use(sessionCleanupMiddleware);
+    bot.use(messageCleanupMiddleware);
 
-    const channels = await ChannelModel.find({ 
-      owners: userId,
-      botId: record.botId 
-    });
-    
-    if (!channels.length) {
-      await ctx.reply(
-        "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
-        { parse_mode: "Markdown" }
-      );
-      return;
-    }
+    registerPostCommands(bot);
+    registerChannelsCommands(bot, { enableLinking: true });
 
-    let response = "**Channel Status Check:**\n\n";
-    
-    for (const channel of channels) {
-      const channelName = channel.title || channel.username || channel.chatId.toString();
-      
-      try {
-        // Test if bot can send to the channel
-        const chatMember = await bot.api.getChatMember(channel.chatId, record.botId);
-        const canPost = chatMember.status === "administrator" && 
-                       (chatMember.can_post_messages === true || chatMember.can_post_messages === undefined);
-        
-        if (canPost) {
-          response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
-        } else {
-          response += `**${channelName}**\nStatus: Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
-        }
-      } catch (error) {
-        response += `**${channelName}**\nStatus: Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+    // Check channels command - moved from core to personal bot
+    bot.command("checkchannels", async (ctx) => {
+      const userId = ctx.from?.id;
+      if (!userId) {
+        await ctx.reply("Authentication required.");
+        return;
       }
-    }
 
-    response += "*Tip: Re-add this bot as admin to channels showing errors*";
-    await ctx.reply(response, { parse_mode: "Markdown" });
-  });
+      const channels = await ChannelModel.find({ 
+        owners: userId,
+        botId: record.botId 
+      });
+      
+      if (!channels.length) {
+        await ctx.reply(
+          "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
+          { parse_mode: "Markdown" }
+        );
+        return;
+      }
 
-  bot.on("callback_query:data", async (ctx, next) => {
-    if (await handleChannelCallback(ctx)) return; // handled
-    return next();
-  });
+      let response = "**Channel Status Check:**\n\n";
+      
+      for (const channel of channels) {
+        const channelName = channel.title || channel.username || channel.chatId.toString();
+        
+        try {
+          // Test if bot can send to the channel
+          const chatMember = await bot.api.getChatMember(channel.chatId, record.botId);
+          const canPost = chatMember.status === "administrator" && 
+                         (chatMember.can_post_messages === true || chatMember.can_post_messages === undefined);
+          
+          if (canPost) {
+            response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
+          } else {
+            response += `**${channelName}**\nStatus: Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
+          }
+        } catch (error) {
+          response += `**${channelName}**\nStatus: Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+        }
+      }
 
-  bot.api
-    .setMyCommands([
-      { command: "newpost", description: "Create a new post" },
-      { command: "queue", description: "View scheduled posts" },
-      { command: "addchannel", description: "Link a channel to this bot" },
-      { command: "channels", description: "List linked channels" },
-      { command: "checkchannels", description: "Verify channel permissions" },
-      { command: "schedule", description: "(Use buttons)" },
-      { command: "cancel", description: "Cancel current draft" },
-    ])
-    .catch((err) => {
-      logger.warn({ err, botId }, "Failed setting personal bot commands");
+      response += "*Tip: Re-add this bot as admin to channels showing errors*";
+      await ctx.reply(response, { parse_mode: "Markdown" });
     });
 
-  bot.catch((err) => {
-    const meta = activeBots.get(botId);
-    if (meta) meta.failures += 1;
-    logger.error({ err, botId }, "Unhandled personal bot error");
-  });
-
-  activeBots.set(botId, {
-    bot,
-    ownerTgId: record.ownerTgId,
-    username: record.username || undefined,
-    failures: 0,
-    startedAt: new Date(),
-  });
-  bot
-    .start({ drop_pending_updates: false })
-    .then(() => {
-      logger.info(
-        { botId, username: record.username, owner: record.ownerTgId },
-        "Personal bot started",
-      );
-    })
-    .catch(async (err) => {
-      logger.error({ err, botId }, "Failed to start personal bot");
-      stopUserBot(botId);
-      await UserBotModel.updateOne(
-        { botId },
-        { $set: { status: "error", lastError: (err as Error).message } },
-      );
+    bot.on("callback_query:data", async (ctx, next) => {
+      if (await handleChannelCallback(ctx)) return; // handled
+      return next();
     });
-  return bot;
+
+    bot.api
+      .setMyCommands([
+        { command: "newpost", description: "Create a new post" },
+        { command: "queue", description: "View scheduled posts" },
+        { command: "addchannel", description: "Link a channel to this bot" },
+        { command: "channels", description: "List linked channels" },
+        { command: "checkchannels", description: "Verify channel permissions" },
+        { command: "schedule", description: "(Use buttons)" },
+        { command: "cancel", description: "Cancel current draft" },
+      ])
+      .catch((err) => {
+        logger.warn({ err, botId }, "Failed setting personal bot commands");
+      });
+
+    bot.catch((err) => {
+      const meta = activeBots.get(botId);
+      if (meta) meta.failures += 1;
+      logger.error({ err, botId }, "Unhandled personal bot error");
+    });
+
+    activeBots.set(botId, {
+      bot,
+      ownerTgId: record.ownerTgId,
+      username: record.username || undefined,
+      failures: 0,
+      startedAt: new Date(),
+    });
+    bot
+      .start({ drop_pending_updates: false })
+      .then(() => {
+        logger.info(
+          { botId, username: record.username, owner: record.ownerTgId },
+          "Personal bot started",
+        );
+      })
+      .catch(async (err) => {
+        logger.error({ err, botId }, "Failed to start personal bot");
+        stopUserBot(botId);
+        await UserBotModel.updateOne(
+          { botId },
+          { $set: { status: "error", lastError: (err as Error).message } },
+        );
+      });
+    return bot;
+  })();
+
+  creatingBots.set(botId, creation);
+  try {
+    const result = await creation;
+    return result;
+  } finally {
+    creatingBots.delete(botId);
+  }
 }
 
 export function stopUserBot(botId: number) {
