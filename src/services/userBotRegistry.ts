@@ -76,7 +76,7 @@ export async function getOrCreateUserBot(botId: number) {
     registerPostCommands(bot);
     registerChannelsCommands(bot, { enableLinking: true });
 
-    // Check channels command - moved from core to personal bot
+    // Check channels command
     bot.command("checkchannels", async (ctx) => {
       const userId = ctx.from?.id;
       if (!userId) {
@@ -155,7 +155,7 @@ export async function getOrCreateUserBot(botId: number) {
       startedAt: new Date(),
     });
     bot
-      .start({ drop_pending_updates: false })
+      .start({ drop_pending_updates: true })
       .then(() => {
         logger.info(
           { botId, username: record.username, owner: record.ownerTgId },

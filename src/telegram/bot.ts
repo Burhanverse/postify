@@ -116,6 +116,8 @@ bot.catch((err) => {
 });
 
 export function launchBot() {
-  bot.start();
+  bot.start({
+    drop_pending_updates: true,
+  });
   logger.info("Bot started");
 }
