@@ -110,7 +110,7 @@ export function createServer(): FastifyInstance {
 export function startHttpServer(): FastifyInstance {
   const app = createServer();
   app
-    .listen({ port: env.PORT, host: "0.0.0.0" })
+    .listen({ port: env.PORT, host: "127.0.0.1" })
     .then((address: string) =>
       logger.info({ address }, "HTTP server listening"),
     )
