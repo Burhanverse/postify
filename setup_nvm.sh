@@ -16,8 +16,6 @@ fi
 
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-. ~/.bashrc 
-
 nvm install 22.12.0
 nvm alias default 22.12.0
 
@@ -30,3 +28,5 @@ if [ -f "./package.json" ]; then
 else
 	printf "No package.json found in %s, skipping npm i\n" "$(pwd)"
 fi
+
+. ~/.bashrc 
