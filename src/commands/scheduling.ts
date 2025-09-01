@@ -139,7 +139,11 @@ export async function handleScheduleCommand(
       text: ctx.session.draft.text,
       mediaFileId: ctx.session.draft.mediaFileId,
       buttons: ctx.session.draft.buttons,
+      pinAfterPosting: ctx.session.scheduleWithPin || false,
     });
+
+    // Clear the pin flag from session after use
+    delete ctx.session.scheduleWithPin;
 
     // Schedule the post
     const scheduleResult = await postScheduler.schedulePost({
@@ -166,9 +170,14 @@ export async function handleScheduleCommand(
     delete ctx.session.draftLocked;
 
     // Success message
-    let successMessage = `**Post scheduled successfully!**\n\n`;
+    let successMessage = post.pinAfterPosting 
+      ? `**Post scheduled successfully with pinning!**\n\n`
+      : `**Post scheduled successfully!**\n\n`;
     successMessage += `**When:** ${scheduledAt.toFormat("MMMM dd, yyyy 'at' HH:mm")} ${timezone}\n`;
     successMessage += `**Channel:** ${channel.title || channel.username || channel.chatId}\n`;
+    if (post.pinAfterPosting) {
+      successMessage += `**Will be pinned:** Yes\n`;
+    }
     successMessage += `**Post ID:** \`${post._id.toString()}\``;
 
     if (scheduleResult.warning) {

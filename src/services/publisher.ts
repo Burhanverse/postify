@@ -136,6 +136,35 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
       },
     },
   );
+
+  // Pin the message if requested
+  if (post.pinAfterPosting) {
+    try {
+      const personalBot = await getOrCreateUserBot(channel.botId);
+      await personalBot.api.pinChatMessage(chatId, sent.message_id);
+      
+      await PostModel.updateOne(
+        { _id: post._id },
+        {
+          $set: {
+            pinnedAt: new Date(),
+          },
+        },
+      );
+      
+      logger.info(
+        { postId: post._id.toString(), messageId: sent.message_id },
+        "Post pinned successfully",
+      );
+    } catch (err) {
+      logger.error(
+        { err, postId: post._id.toString(), messageId: sent.message_id },
+        "Failed to pin message after posting",
+      );
+      // Don't throw error for pinning failure - the post was still published successfully
+    }
+  }
+
   logger.info(
     { postId: post._id.toString(), messageId: sent.message_id },
     "Post published",

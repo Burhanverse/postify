@@ -39,6 +39,7 @@ export interface SessionData {
   awaitingBotToken?: boolean;
   awaitingUnlinkBotConfirm?: boolean;
   draftLocked?: boolean;
+  scheduleWithPin?: boolean;
   // Message cleanup tracking
   recentBotMessages?: number[]; // Array of message IDs to track for cleanup
   protectedMessages?: {

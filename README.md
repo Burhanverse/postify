@@ -14,14 +14,13 @@ A Telegram channel management & scheduling bot built with TypeScript, grammy, Mo
 | Scheduling (presets + custom)         | Implemented             |
 | Timezone preferences                  | Implemented             |
 | Queues (scheduled list)               | Testing                 |
-| Send/Schedule & Pin the post          | Planned                 |
+| Send/Schedule & Pin the post          | Implemented         |
 | Group Topic Support                   | Planned                 |
 | Link personal bot                     | Implemented             |
 
 ## Roadmap (Upcoming Ideas)
 
 - Add support for shared-access to other channel admins
-- Add support for pinning the content after being posted.
 - Improve text formating of the response messages.
 
 ## Development

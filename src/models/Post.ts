@@ -26,6 +26,8 @@ const PostSchema = new Schema(
     scheduledAt: Date,
     publishedMessageId: Number,
     publishedAt: Date,
+    pinAfterPosting: { type: Boolean, default: false },
+    pinnedAt: Date,
     meta: { type: Map, of: String },
   },
   { timestamps: true },

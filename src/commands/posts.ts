@@ -688,7 +688,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
         .text("Now", "draft:sendnow")
+        .text("Send & Pin", "draft:sendnowpin")
+        .row()
         .text("Schedule", "draft:schedule")
+        .text("Schedule & Pin", "draft:schedulepin")
         .row()
         .text("Back", "draft:back");
       try {
@@ -828,6 +831,14 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (action === "schedule") {
       await ctx.answerCallbackQuery();
       // Use the new enhanced scheduling interface instead of broken input mode
+      await handleScheduleCommand(ctx);
+      return;
+    }
+    if (action === "schedulepin") {
+      await ctx.answerCallbackQuery();
+      // Set pin flag in session before calling schedule handler
+      ctx.session.scheduleWithPin = true;
+      // Use the new enhanced scheduling interface
       await handleScheduleCommand(ctx);
       return;
     }
@@ -1006,6 +1017,182 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           ) {
             await sendErrorMessage(
               "**Error: Insufficient permissions**\n\nPersonal bot lacks permission to post. Make sure your personal bot is still an admin with posting rights.",
+            );
+          } else if (
+            error.message.includes("personal bot") ||
+            error.message.includes("Personal bot inactive")
+          ) {
+            await sendErrorMessage(
+              "**Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
+            );
+          } else {
+            await sendErrorMessage(`**Error occurred**\n\n${error.message}`);
+          }
+        } else {
+          await sendErrorMessage(
+            "**Unknown error occurred**\n\nPlease try again or contact support.",
+          );
+        }
+      }
+      return;
+    }
+    if (action === "sendnowpin") {
+      // Keep draft locked during send operation
+      // Immediate send with pinning
+      const draft = ctx.session.draft;
+      if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "**Draft is empty!**\n\nAdd text or media content first before sending.",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Check if channel is selected
+      if (!ctx.session.selectedChannelChatId) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "**No channel selected!**\n\nUse /newpost to select a channel first.",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      const channel = await ChannelModel.findOne({
+        chatId: ctx.session.selectedChannelChatId,
+        owners: ctx.from?.id,
+      });
+
+      if (!channel) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "**Channel not found!**\n\nPlease use /newpost to select a valid channel.",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Ensure channel is bound to a personal bot (post-migration requirement)
+      if (!channel.botId) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "**Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat.",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Quick active personal bot record check before creating DB post
+      const { UserBotModel } = await import("../models/UserBot");
+      const userBotRecord = await UserBotModel.findOne({
+        botId: channel.botId,
+        status: "active",
+      });
+      if (!userBotRecord) {
+        await ctx.answerCallbackQuery();
+        await ctx.reply(
+          "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
+          { parse_mode: "Markdown" },
+        );
+        return;
+      }
+
+      // Provide immediate feedback (avoid silent wait on network)
+      try {
+        await ctx.answerCallbackQuery({ text: "Sending & pinning…" });
+      } catch {}
+
+      try {
+        // Create the post in the database with pin flag
+        const post = await PostModel.create({
+          channel: channel._id,
+          channelChatId: channel.chatId,
+          authorTgId: ctx.from?.id,
+          status: "draft", // Create as draft first
+          type: draft.postType || "text",
+          text: draft.text?.trim() || undefined,
+          mediaFileId: draft.mediaFileId || undefined,
+          buttons: draft.buttons || [],
+          pinAfterPosting: true,
+        });
+
+        console.log("Created post with pin flag:", post._id.toString());
+
+        // Publish immediately using the publisher service
+        const { publishPost } = await import("../services/publisher");
+        await publishPost(post as Post & { _id: Types.ObjectId });
+
+        console.log("Published and pinned post successfully");
+
+        // Clear draft session
+        delete ctx.session.draft;
+        delete ctx.session.draftPreviewMessageId;
+        delete ctx.session.lastDraftTextMessageId;
+        delete ctx.session.draftSourceMessages;
+        delete ctx.session.initialDraftMessageId;
+        delete ctx.session.draftLocked;
+
+        await ctx.answerCallbackQuery();
+
+        // Check if the current message has media content
+        const successMessage = `**Post sent & pinned successfully!**\n\nYour post has been published and pinned to: ${channel.title || channel.username || channel.chatId}`;
+
+        try {
+          if (
+            draft.mediaFileId &&
+            (draft.postType === "photo" || draft.postType === "video")
+          ) {
+            // Media – cannot edit original draft control message reliably; send new success message
+            await ctx.reply(successMessage, { parse_mode: "Markdown" });
+          } else {
+            // Text – edit the control/preview message if possible
+            try {
+              await ctx.editMessageText(successMessage, {
+                parse_mode: "Markdown",
+              });
+            } catch {
+              await ctx.reply(successMessage, { parse_mode: "Markdown" });
+            }
+          }
+        } catch {
+          await ctx.reply(successMessage, { parse_mode: "Markdown" });
+        }
+      } catch (error) {
+        console.error("Send now & pin error:", error);
+        try {
+          await ctx.answerCallbackQuery();
+        } catch {}
+        // Unlock to let user adjust after failure
+        delete ctx.session.draftLocked;
+
+        // Try to provide more specific error information
+        const sendErrorMessage = async (message: string) => {
+          try {
+            if (
+              draft.mediaFileId &&
+              (draft.postType === "photo" || draft.postType === "video")
+            ) {
+              await ctx.reply(message, { parse_mode: "Markdown" });
+            } else {
+              await ctx.editMessageText(message, { parse_mode: "Markdown" });
+            }
+          } catch {
+            await ctx.reply(message, { parse_mode: "Markdown" });
+          }
+        };
+
+        if (error instanceof Error) {
+          if (error.message.includes("chat not found")) {
+            await sendErrorMessage(
+              "**Error: Channel not found**\n\nPlease re-add the channel with /addchannel",
+            );
+          } else if (
+            error.message.includes("not enough rights") ||
+            error.message.includes("lacks posting rights")
+          ) {
+            await sendErrorMessage(
+              "**Error: Insufficient permissions**\n\nPersonal bot lacks permission to post or pin. Make sure your personal bot is still an admin with posting and pinning rights.",
             );
           } else if (
             error.message.includes("personal bot") ||
