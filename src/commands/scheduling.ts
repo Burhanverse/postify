@@ -6,6 +6,8 @@ import { PostModel } from "../models/Post";
 import { UserModel, User } from "../models/User";
 import { logger } from "../utils/logger";
 import { DateTime } from "luxon";
+import { clearAllDraftData } from "../middleware/sessionCleanup";
+
 async function upsertScheduleMessage(
   ctx: BotContext,
   text: string,
@@ -162,12 +164,7 @@ export async function handleScheduleCommand(
     }
 
     // Clear draft session
-    delete ctx.session.draft;
-    delete ctx.session.draftPreviewMessageId;
-    delete ctx.session.lastDraftTextMessageId;
-    delete ctx.session.draftSourceMessages;
-    delete ctx.session.initialDraftMessageId;
-    delete ctx.session.draftLocked;
+    clearAllDraftData(ctx);
 
     // Success message
     let successMessage = post.pinAfterPosting 

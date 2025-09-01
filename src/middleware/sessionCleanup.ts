@@ -29,6 +29,7 @@ async function cleanupSession(ctx: BotContext) {
 
     if (ctx.session.draftPreviewMessageId && !ctx.session.draft) {
       delete ctx.session.draftPreviewMessageId;
+      delete ctx.session.controlMessageId;
       delete ctx.session.lastDraftTextMessageId;
       delete ctx.session.draftSourceMessages;
       delete ctx.session.initialDraftMessageId;
@@ -84,12 +85,44 @@ export function clearDraftSession(ctx: BotContext) {
 
   delete ctx.session.draft;
   delete ctx.session.draftPreviewMessageId;
+  delete ctx.session.controlMessageId;
   delete ctx.session.lastDraftTextMessageId;
   delete ctx.session.draftSourceMessages;
   delete ctx.session.initialDraftMessageId;
   delete ctx.session.draftEditMode;
 
   logger.debug({ userId: ctx.from?.id }, "Draft session cleared");
+}
+
+// Enhanced helper function to clear all draft-related session data
+export function clearAllDraftData(ctx: BotContext, clearLocked = true) {
+  if (!ctx.session) {
+    logger.debug({ userId: ctx.from?.id }, "No session to clear draft data from");
+    return;
+  }
+
+  delete ctx.session.draft;
+  delete ctx.session.draftPreviewMessageId;
+  delete ctx.session.controlMessageId;
+  delete ctx.session.lastDraftTextMessageId;
+  delete ctx.session.draftSourceMessages;
+  delete ctx.session.initialDraftMessageId;
+  delete ctx.session.draftEditMode;
+  
+  if (clearLocked) {
+    delete ctx.session.draftLocked;
+  }
+
+  logger.debug({ userId: ctx.from?.id, clearLocked }, "All draft data cleared");
+}
+
+// Helper function to force a clean start for new draft sessions
+export function initializeCleanDraftSession(ctx: BotContext) {
+  clearAllDraftData(ctx);
+  if (ctx.session) {
+    ctx.session.draft = { postType: "text", buttons: [] };
+  }
+  logger.debug({ userId: ctx.from?.id }, "Clean draft session initialized");
 }
 
 export function clearChannelSession(ctx: BotContext) {

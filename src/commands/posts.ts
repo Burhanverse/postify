@@ -17,7 +17,11 @@ import {
   wrapCommand,
   validateChannelAccess,
 } from "../utils/commandHelpers";
-import { clearDraftSession } from "../middleware/sessionCleanup";
+import { 
+  clearDraftSession, 
+  clearAllDraftData, 
+  initializeCleanDraftSession 
+} from "../middleware/sessionCleanup";
 import { logUserActivity } from "../middleware/logging";
 import { cleanupOldDraftPreview } from "../middleware/messageCleanup";
 import { handleScheduleCommand, handleScheduleCallback } from "./scheduling";
@@ -302,11 +306,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       const channel = channels[0];
       ctx.session.selectedChannelChatId = channel.chatId;
 
-      ctx.session.draft = { postType: "text", buttons: [] };
-      delete ctx.session.draftPreviewMessageId;
-      delete ctx.session.lastDraftTextMessageId;
-      delete ctx.session.draftSourceMessages;
-      delete ctx.session.initialDraftMessageId;
+      initializeCleanDraftSession(ctx);
 
       await ctx.reply(
         `**Draft started for:** ${channel.title || channel.username || channel.chatId}\n\n` +
@@ -573,11 +573,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
         // Set selected channel and start draft
         ctx.session.selectedChannelChatId = chatId;
-        ctx.session.draft = { postType: "text", buttons: [] };
-        delete ctx.session.draftPreviewMessageId;
-        delete ctx.session.lastDraftTextMessageId;
-        delete ctx.session.draftSourceMessages;
-        delete ctx.session.initialDraftMessageId;
+        initializeCleanDraftSession(ctx);
 
         await ctx.answerCallbackQuery();
         await ctx.editMessageText(
@@ -624,11 +620,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     if (data === "new_post" || data === "new_post_quick") {
       await ctx.answerCallbackQuery();
       // Clear any existing draft to start fresh
-      ctx.session.draft = { postType: "text", buttons: [] };
-      delete ctx.session.draftPreviewMessageId;
-      delete ctx.session.lastDraftTextMessageId;
-      delete ctx.session.draftSourceMessages;
-      delete ctx.session.initialDraftMessageId;
+      initializeCleanDraftSession(ctx);
       delete ctx.session.selectedChannelChatId;
 
       // Trigger new post flow - call the newpost command handler logic
@@ -802,10 +794,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "clear") {
-      ctx.session.draft = { postType: "text", buttons: [] };
-      delete ctx.session.lastDraftTextMessageId;
-      delete ctx.session.draftSourceMessages;
-      delete ctx.session.initialDraftMessageId;
+      clearAllDraftData(ctx, false); // Keep lock status but clear other data
+      ctx.session.draft = { postType: "text", buttons: [] }; // Re-initialize clean draft
       await ctx.answerCallbackQuery();
       await ctx.reply(
         "**Draft cleared**\n\nYour draft has been reset. You can start adding content again.",
@@ -815,12 +805,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "cancel") {
-      delete ctx.session.draft;
-      delete ctx.session.draftPreviewMessageId;
-      delete ctx.session.lastDraftTextMessageId;
-      delete ctx.session.draftSourceMessages;
-      delete ctx.session.initialDraftMessageId;
-      delete ctx.session.draftLocked;
+      clearAllDraftData(ctx);
       await ctx.answerCallbackQuery();
       await ctx.reply(
         "**Draft cancelled**\n\nYour draft has been discarded. Use /newpost to start over.",
@@ -950,12 +935,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         console.log("Published post successfully");
 
         // Clear draft session
-        delete ctx.session.draft;
-        delete ctx.session.draftPreviewMessageId;
-        delete ctx.session.lastDraftTextMessageId;
-        delete ctx.session.draftSourceMessages;
-        delete ctx.session.initialDraftMessageId;
-        delete ctx.session.draftLocked;
+        clearAllDraftData(ctx);
 
         await ctx.answerCallbackQuery();
 
@@ -1126,12 +1106,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         console.log("Published and pinned post successfully");
 
         // Clear draft session
-        delete ctx.session.draft;
-        delete ctx.session.draftPreviewMessageId;
-        delete ctx.session.lastDraftTextMessageId;
-        delete ctx.session.draftSourceMessages;
-        delete ctx.session.initialDraftMessageId;
-        delete ctx.session.draftLocked;
+        clearAllDraftData(ctx);
 
         await ctx.answerCallbackQuery();
 
