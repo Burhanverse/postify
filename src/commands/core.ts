@@ -151,30 +151,9 @@ export function addStartCommand(bot: Bot<BotContext>, isPersonalBot = false) {
   });
 }
 
-// Legacy help command redirect (for backwards compatibility)
-export function addHelpCommand(bot: Bot<BotContext>, isPersonalBot = false) {
-  bot.command("help", async (ctx) => {
-    try {
-      const { text, keyboard } = createHelpMessage(isPersonalBot);
-      
-      await ctx.reply(text, {
-        parse_mode: "HTML",
-        reply_markup: keyboard,
-        link_preview_options: { is_disabled: true }
-      });
-    } catch (error) {
-      logger.error({ error }, "Error in help command");
-      await ctx.reply("An error occurred while displaying help information.");
-    }
-  });
-}
-
 export function registerCoreCommands(bot: Bot<BotContext>) {
   // Add enhanced start/about command
   addStartCommand(bot, false);
-  
-  // Add help command for backwards compatibility
-  addHelpCommand(bot, false);
 
   bot.command("addchannel", async (ctx) => {
     await ctx.reply(
@@ -310,7 +289,6 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     .setMyCommands([
       { command: "start", description: "Show bot information" },
       { command: "about", description: "About Postify Bot" },
-      { command: "help", description: "Show help & features" },
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
       { command: "unlinkbot", description: "Remove personal bot" },

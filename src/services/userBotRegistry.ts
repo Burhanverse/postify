@@ -13,7 +13,7 @@ import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
 import { messageCleanupMiddleware } from "../middleware/messageCleanup";
 import { registerPostCommands } from "../commands/posts";
 import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
-import { addStartCommand, addHelpCommand } from "../commands/core";
+import { addStartCommand } from "../commands/core";
 import { decrypt } from "../utils/crypto.js";
 
 interface ActiveBotMeta {
@@ -79,7 +79,6 @@ export async function getOrCreateUserBot(botId: number) {
     
     // Add enhanced start/about command for personal bots
     addStartCommand(bot, true);
-    addHelpCommand(bot, true);
 
     // Check channels command
     bot.command("checkchannels", async (ctx) => {
@@ -136,7 +135,6 @@ export async function getOrCreateUserBot(botId: number) {
       .setMyCommands([
         { command: "start", description: "Show bot information" },
         { command: "about", description: "About Postify Bot" },
-        { command: "help", description: "Show help & features" },
         { command: "newpost", description: "Create a new post" },
         { command: "queue", description: "View scheduled posts" },
         { command: "addchannel", description: "Link a channel to this bot" },
