@@ -154,32 +154,11 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     }
   });
 
-  bot.command("migratechannels", async (ctx) => {
-    const legacy = await ChannelModel.find({
-      $or: [{ botId: { $exists: false } }, { botId: null }],
-    });
-    if (!legacy.length) {
-      await ctx.reply(
-        "All channels migrated (have botId).\nRelink any problematic ones via personal bot.",
-      );
-      return;
-    }
-    const lines = legacy
-      .slice(0, 25)
-      .map(
-        (c) => `• ${c.title || c.username || c.chatId} (chatId=${c.chatId})`,
-      );
-    await ctx.reply(
-      `Legacy channels (need relink via personal bot):\n${lines.join("\n")}`,
-    );
-  });
-
   bot.api
     .setMyCommands([
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
       { command: "unlinkbot", description: "Remove personal bot" },
-      { command: "migratechannels", description: "List legacy channels" },
     ])
     .catch((err) => logger.error({ err }, "setMyCommands failed"));
 }

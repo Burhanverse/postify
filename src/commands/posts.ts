@@ -106,7 +106,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       await ctx.reply('Cancelled scheduled post.');
       return;
     }
-  // ...existing code...
+
     if (data?.startsWith('queue:select:')) {
       await ctx.answerCallbackQuery();
       const chatId = data.split(':')[2];
@@ -883,7 +883,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         return;
       }
 
-      // Ensure channel is bound to a personal bot (post-migration requirement)
+      // Ensure channel is bound to a personal bot
       if (!channel.botId) {
         await ctx.answerCallbackQuery();
         await ctx.reply(
@@ -1053,7 +1053,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         return;
       }
 
-      // Ensure channel is bound to a personal bot (post-migration requirement)
+      // Ensure channel is bound to a personal bot
       if (!channel.botId) {
         await ctx.answerCallbackQuery();
         await ctx.reply(

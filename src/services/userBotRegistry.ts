@@ -58,7 +58,7 @@ export async function getOrCreateUserBot(botId: number) {
     const rawToken = record.tokenEncrypted
       ? decrypt(record.tokenEncrypted)
       : record.token;
-    if (!rawToken) throw new Error("Bot token missing (migration required)");
+    if (!rawToken) throw new Error("Bot token missing or invalid");
     const bot = new Bot<BotContext>(rawToken);
 
     // Ownership guard FIRST
