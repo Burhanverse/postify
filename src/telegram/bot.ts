@@ -11,7 +11,6 @@ import { validationMiddleware } from "../middleware/validation";
 import { loggingMiddleware } from "../middleware/logging";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
 import { messageCleanupMiddleware } from "../middleware/messageCleanup";
-import { PostModel } from "../models/Post";
 import { logger } from "../utils/logger";
 
 export interface SessionData {
@@ -73,7 +72,7 @@ registerPostCommands(bot);
 registerAdminCommands(bot);
 
 // Callback dispatcher
-bot.on("callback_query:data", async (ctx) => {
+bot.on("callback_query:data", async (_ctx) => {
   // Main bot doesn't handle channel callbacks anymore
   // They are handled in user bots
 });

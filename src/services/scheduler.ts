@@ -508,9 +508,6 @@ export class PostScheduler {
         return { success: false, error: "Scheduler not initialized" };
       }
 
-      // Create a unique job name to prevent duplicates
-      const jobName = `publish_post_${postId}`;
-
       // Cancel any existing job for this post
       await agenda.cancel({ name: "publish_post", "data.postId": postId });
 

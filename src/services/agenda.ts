@@ -5,7 +5,6 @@ import { PostModel } from "../models/Post";
 import { ChannelModel } from "../models/Channel";
 import { publishPost } from "./publisher";
 import { DateTime } from "luxon";
-import { Types } from "mongoose";
 
 let agenda: Agenda;
 
@@ -28,7 +27,7 @@ export async function initAgenda() {
       concurrency: 5,
     },
     async (job: Job) => {
-      const { postId, channelId, userId, timezone } = job.attrs.data as {
+      const { postId, channelId, userId } = job.attrs.data as {
         postId: string;
         channelId?: string;
         userId?: number;

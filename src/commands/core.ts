@@ -1,7 +1,6 @@
 import { Bot } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
-import { ChannelModel } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
 import { getOrCreateUserBot } from "../services/userBotRegistry";
 import { encrypt } from "../utils/crypto";

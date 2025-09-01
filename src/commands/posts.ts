@@ -3,7 +3,6 @@ import type { Message, PhotoSize, Video } from "grammy/types";
 import { BotContext } from "../telegram/bot";
 import { PostModel, Post } from "../models/Post";
 import { ChannelModel } from "../models/Channel";
-import { schedulePost } from "../services/agenda";
 import { formatToHtml } from "../utils/format";
 import { DateTime } from "luxon";
 import { Types } from "mongoose";
@@ -11,18 +10,11 @@ import {
   requireSelectedChannel,
   requirePostPermission,
 } from "../middleware/auth";
-import {
-  safeCommandExecution,
-  safeDraftOperation,
-  wrapCommand,
-  validateChannelAccess,
-} from "../utils/commandHelpers";
+import { wrapCommand } from "../utils/commandHelpers";
 import { 
-  clearDraftSession, 
   clearAllDraftData, 
   initializeCleanDraftSession 
 } from "../middleware/sessionCleanup";
-import { logUserActivity } from "../middleware/logging";
 import { cleanupOldDraftPreview } from "../middleware/messageCleanup";
 import { handleScheduleCommand, handleScheduleCallback } from "./scheduling";
 import { postScheduler } from "../services/scheduler";

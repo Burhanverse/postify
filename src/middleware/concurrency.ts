@@ -42,9 +42,9 @@ class ConcurrencyManager {
     }
 
     // Create new lock
-    let resolveLock: () => void;
-    const lockPromise = new Promise<void>((resolve) => {
-      resolveLock = resolve;
+    const lockPromise = new Promise<void>((_resolve) => {
+      // The resolve function is available but not used in current implementation
+      // The lock is managed via the releaseLock method which removes from Map
     });
 
     const lockEntry: LockEntry = {
