@@ -687,8 +687,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       // Lock draft so no further content modifications are ingested while user chooses now vs schedule
       ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
-        .text("Now", "draft:sendnow")
-        .text("Send & Pin", "draft:sendnowpin")
+        .text("Send Now", "draft:sendnow")
+        .text("Send Now & Pin", "draft:sendnowpin")
         .row()
         .text("Schedule", "draft:schedule")
         .text("Schedule & Pin", "draft:schedulepin")
