@@ -21,11 +21,6 @@ const EnvSchema = z.object({
     .transform((v) => parseInt(v, 10))
     .optional(),
   RATE_LIMIT_EXEMPT_ACTIONS: z.string().optional(),
-  PORT: z
-    .string()
-    .regex(/^[0-9]+$/)
-    .transform((v) => parseInt(v, 10))
-    .default("3000"),
 });
 
 type Env = z.infer<typeof EnvSchema>;

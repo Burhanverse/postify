@@ -7,12 +7,10 @@ import {
 } from "./services/userBotRegistry";
 import { logger } from "./utils/logger";
 import { env } from "./config/env";
-import { startHttpServer } from "./server";
 
 async function main() {
   await connectDb();
   await initAgenda();
-  startHttpServer();
   if (/ABCDEF|YOUR_TOKEN|123456:ABC/i.test(env.BOT_TOKEN)) {
     logger.warn(
       "BOT_TOKEN appears to be a placeholder. Skipping bot start. Set a real token to run the bot.",
