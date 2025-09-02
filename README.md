@@ -89,6 +89,12 @@ function hello() {
 <blockquote>This is a quote</blockquote>
 ```
 
-## License
+## Credits
 
-MIT
+AI assistants that helped in the development of this project:
+- Claude 4
+- ChatGPT 5
+- Gemini 2.5 Pro
+- Grok Code
+
+*Made with ❤️ by Burhanverse*
