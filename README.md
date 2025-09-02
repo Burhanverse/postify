@@ -1,6 +1,18 @@
-# Postify Bot
+<p align="center">
+<img src="https://raw.githubusercontent.com/Burhanverse/assets/refs/heads/main/postify.png" alt="RSS-ify Bot" width="130">
+</p>
+<h1 align="center">Postify</h1>
 
-A Telegram channel management & scheduling bot built with TypeScript, grammy, MongoDB & Agenda.
+<p align="center"><b>A Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!</b></p>
+
+<div align="center">
+
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/Burhanverse/postify?logo=git&label=commit)](https://github.com/Burhanverse/postify/commits)
+[![Code quality](https://img.shields.io/codefactor/grade/github/Burhanverse/postify?logo=codefactor)](https://www.codefactor.io/repository/github/Burhanverse/postify)
+[![GitHub stars](https://img.shields.io/github/stars/Burhanverse/postify?style=social)](https://github.com/Burhanverse/postify/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/Burhanverse/postify?style=social)](https://github.com/Burhanverse/postify/fork)
+
+</div>
 
 ## Features (Roadmap)
 
@@ -14,7 +26,7 @@ A Telegram channel management & scheduling bot built with TypeScript, grammy, Mo
 | Scheduling (presets + custom)         | Implemented             |
 | Timezone preferences                  | Implemented             |
 | Queues (scheduled list)               | Testing                 |
-| Send/Schedule & Pin the post          | Implemented         |
+| Send/Schedule & Pin the post          | Implemented             |
 | Group Topic Support                   | Planned                 |
 | Link personal bot                     | Implemented             |
 
