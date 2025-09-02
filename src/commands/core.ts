@@ -12,7 +12,7 @@ const packageInfo = getPackageInfo();
 const BOT_INFO = {
   name: packageInfo.name,
   version: packageInfo.version,
-  description: " is a Telegram channel management & scheduling bot built with TypeScript, grammy, MongoDB & Agenda.",
+  description: packageInfo.description,
   developer: "Burhanverse",
   owner: "Burhanverse",
   sourceCode: "https://github.com/Burhanverse/postify",
@@ -21,11 +21,11 @@ const BOT_INFO = {
 
 // Helper function to create the about/start message
 async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promise<{ text: string; keyboard: InlineKeyboard }> {
-  const text = `<b>${BOT_INFO.name}</b>` +
+  const text = `<b>${BOT_INFO.name}</b> is a ` +
     `<i>${BOT_INFO.description}</i>\n\n` +
-    `<i>Version ${BOT_INFO.version}</i>\n` +
-    `<b>Developer:</b> ${BOT_INFO.developer}\n` +
-    `<b>Owner:</b> ${BOT_INFO.owner}\n\n` +
+    `<b>Version:</b><i> ${BOT_INFO.version}</i>\n` +
+    `<b>Developer:</b><i> ${BOT_INFO.developer}</i>\n` +
+    `<b>Owner:</b><i> ${BOT_INFO.owner}</i>\n\n` +
     `<blockquote>Key Features:\n` +
     `• Channel management (public & private)\n` +
     `• Draft creation with text, media & buttons\n` +

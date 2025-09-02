@@ -27,11 +27,11 @@ export function getPackageInfo(): PackageInfo {
     cachedPackageInfo = JSON.parse(packageContent) as PackageInfo;
     return cachedPackageInfo;
   } catch (error) {
-    // Fallback values if package.json can't be read
+    // Fallback values
     return {
       name: "Postify",
-      version: "0.9.0",
-      description: "A Telegram channel management & scheduling bot"
+      version: "1.1.0",
+      description: "Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!"
     };
   }
 }
