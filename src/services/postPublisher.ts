@@ -1,0 +1,218 @@
+import { InlineKeyboard } from "grammy";
+import type { BotContext } from "../telegram/bot";
+import { ChannelModel } from "../models/Channel";
+import { PostModel, type Post } from "../models/Post";
+import { Types } from "mongoose";
+import { clearAllDraftData } from "../middleware/sessionCleanup";
+import { logger } from "../utils/logger";
+
+interface DraftData {
+  postType?: "text" | "photo" | "video";
+  text?: string;
+  mediaFileId?: string;
+  buttons?: Array<{ text: string; url?: string; callbackData?: string }>;
+}
+
+export class PostPublisher {
+  /**
+   * Validates that the post can be sent
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static async validatePostSending(ctx: BotContext): Promise<{ success: boolean; channel?: any; error?: string }> {
+    const draft = ctx.session.draft;
+    if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
+      return { success: false, error: "**Draft is empty!**\n\nAdd text or media content first before sending." };
+    }
+
+    // Check if channel is selected
+    if (!ctx.session.selectedChannelChatId) {
+      return { success: false, error: "**No channel selected!**\n\nUse /newpost to select a channel first." };
+    }
+
+    const channel = await ChannelModel.findOne({
+      chatId: ctx.session.selectedChannelChatId,
+      owners: ctx.from?.id,
+    });
+
+    if (!channel) {
+      return { success: false, error: "**Channel not found!**\n\nPlease use /newpost to select a valid channel." };
+    }
+
+    // Ensure channel is bound to a personal bot
+    if (!channel.botId) {
+      return { success: false, error: "**Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat." };
+    }
+
+    // Quick active personal bot record check before creating DB post
+    const { UserBotModel } = await import("../models/UserBot");
+    const userBotRecord = await UserBotModel.findOne({
+      botId: channel.botId,
+      status: "active",
+    });
+    if (!userBotRecord) {
+      return { success: false, error: "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status)." };
+    }
+
+    return { success: true, channel };
+  }
+
+  /**
+   * Publishes a post immediately
+   */
+  static async publishImmediate(ctx: BotContext, pinAfterPosting: boolean = false): Promise<void> {
+    const validation = await this.validatePostSending(ctx);
+    if (!validation.success || !validation.channel) {
+      await ctx.reply(validation.error!, { parse_mode: "Markdown" });
+      return;
+    }
+
+    const channel = validation.channel;
+    const draft = ctx.session.draft!;
+
+    // Provide immediate feedback
+    try {
+      const feedbackText = pinAfterPosting ? "Sending & pinning…" : "Sending…";
+      await ctx.answerCallbackQuery({ text: feedbackText });
+    } catch {}
+
+    try {
+      // Create the post in the database
+      const post = await PostModel.create({
+        channel: channel._id,
+        channelChatId: channel.chatId,
+        authorTgId: ctx.from?.id,
+        status: "draft",
+        type: draft.postType || "text",
+        text: draft.text?.trim() || undefined,
+        mediaFileId: draft.mediaFileId || undefined,
+        buttons: draft.buttons || [],
+        pinAfterPosting,
+      });
+
+      console.log(`Created post${pinAfterPosting ? ' with pin flag' : ''}:`, post._id.toString());
+
+      // Publish immediately using the publisher service
+      const { publishPost } = await import("./publisher");
+      await publishPost(post as Post & { _id: Types.ObjectId });
+
+      console.log(`Published${pinAfterPosting ? ' and pinned' : ''} post successfully`);
+
+      // Clear draft session
+      clearAllDraftData(ctx);
+
+      const successMessage = pinAfterPosting 
+        ? `**Post sent & pinned successfully!**\n\nYour post has been published and pinned to: ${channel.title || channel.username || channel.chatId}`
+        : `**Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
+
+      await this.sendSuccessMessage(ctx, successMessage, draft);
+
+    } catch (error) {
+      console.error(`Send now${pinAfterPosting ? ' & pin' : ''} error:`, error);
+      try {
+        await ctx.answerCallbackQuery();
+      } catch {}
+      // Unlock to let user adjust after failure
+      delete ctx.session.draftLocked;
+
+      await this.handlePublishError(ctx, error, draft, pinAfterPosting);
+    }
+  }
+
+  /**
+   * Sends success message after publishing
+   */
+  private static async sendSuccessMessage(ctx: BotContext, message: string, draft: DraftData): Promise<void> {
+    try {
+      if (
+        draft.mediaFileId &&
+        (draft.postType === "photo" || draft.postType === "video")
+      ) {
+        await ctx.reply(message, { parse_mode: "Markdown" });
+      } else {
+        try {
+          await ctx.editMessageText(message, { parse_mode: "Markdown" });
+        } catch {
+          await ctx.reply(message, { parse_mode: "Markdown" });
+        }
+      }
+    } catch {
+      await ctx.reply(message, { parse_mode: "Markdown" });
+    }
+  }
+
+  /**
+   * Handles publish errors with appropriate user messaging
+   */
+  private static async handlePublishError(ctx: BotContext, error: unknown, draft: DraftData, pinning: boolean = false): Promise<void> {
+    const sendErrorMessage = async (message: string) => {
+      try {
+        if (
+          draft.mediaFileId &&
+          (draft.postType === "photo" || draft.postType === "video")
+        ) {
+          await ctx.reply(message, { parse_mode: "Markdown" });
+        } else {
+          await ctx.editMessageText(message, { parse_mode: "Markdown" });
+        }
+      } catch {
+        await ctx.reply(message, { parse_mode: "Markdown" });
+      }
+    };
+
+    if (error instanceof Error) {
+      if (error.message.includes("chat not found")) {
+        await sendErrorMessage(
+          "**Error: Channel not found**\n\nPlease re-add the channel with /addchannel"
+        );
+      } else if (
+        error.message.includes("not enough rights") ||
+        error.message.includes("lacks posting rights")
+      ) {
+        const rights = pinning ? "posting and pinning rights" : "posting rights";
+        await sendErrorMessage(
+          `**Error: Insufficient permissions**\n\nPersonal bot lacks permission to ${pinning ? "post or pin" : "post"}. Make sure your personal bot is still an admin with ${rights}.`
+        );
+      } else if (
+        error.message.includes("personal bot") ||
+        error.message.includes("Personal bot inactive")
+      ) {
+        await sendErrorMessage(
+          "**Personal bot issue**\n\nVerify your personal bot is running (/mybot) and relink the channel via that bot /addchannel."
+        );
+      } else {
+        await sendErrorMessage(`**Error occurred**\n\n${error.message}`);
+      }
+    } else {
+      await sendErrorMessage(
+        "**Unknown error occurred**\n\nPlease try again or contact support."
+      );
+    }
+  }
+
+  /**
+   * Shows sending options (immediate or schedule)
+   */
+  static async showSendingOptions(ctx: BotContext): Promise<void> {
+    ctx.session.draftLocked = true;
+    const kb = new InlineKeyboard()
+      .text("Send Now", "draft:sendnow")
+      .text("Send Now & Pin", "draft:sendnowpin")
+      .row()
+      .text("Schedule", "draft:schedule")
+      .text("Schedule & Pin", "draft:schedulepin")
+      .row()
+      .text("Back", "draft:back");
+
+    try {
+      if (ctx.session.draftPreviewMessageId) {
+        await ctx.api.editMessageReplyMarkup(
+          ctx.chat!.id,
+          ctx.session.draftPreviewMessageId,
+          { reply_markup: kb },
+        );
+      } else {
+        await ctx.editMessageReplyMarkup({ reply_markup: kb });
+      }
+    } catch {}
+  }
+}
