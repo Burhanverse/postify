@@ -506,14 +506,11 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       const msgId = ctx.message.message_id;
       const html = formatToHtml(ctx.message.text);
       if (!ctx.session.initialDraftMessageId) {
-        // First message establishes the draft text
         ctx.session.initialDraftMessageId = msgId;
         ctx.session.draft.text = html;
       } else if (ctx.session.initialDraftMessageId === msgId) {
-        // Subsequent edit will not arrive here (will use edited_message), ignore duplicate send
         return;
       } else {
-        // Additional messages append
         ctx.session.draft.text = ctx.session.draft.text
           ? ctx.session.draft.text + "\n" + html
           : html;
@@ -668,7 +665,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "send") {
-      // Lock draft so no further content modifications are ingested while user chooses now vs schedule
       ctx.session.draftLocked = true;
       const kb = new InlineKeyboard()
         .text("Send Now", "draft:sendnow")
@@ -786,8 +782,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "clear") {
-      clearAllDraftData(ctx, false); // Keep lock status but clear other data
-      ctx.session.draft = { postType: "text", buttons: [] }; // Re-initialize clean draft
+      clearAllDraftData(ctx, false);
+      ctx.session.draft = { postType: "text", buttons: [] };
       await ctx.answerCallbackQuery();
       await ctx.reply(
         "**Draft cleared**\n\nYour draft has been reset. You can start adding content again.",
@@ -807,20 +803,17 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     }
     if (action === "schedule") {
       await ctx.answerCallbackQuery();
-      // Use the new enhanced scheduling interface instead of broken input mode
       await handleScheduleCommand(ctx);
       return;
     }
     if (action === "schedulepin") {
       await ctx.answerCallbackQuery();
-      // Set pin flag in session before calling schedule handler
       ctx.session.scheduleWithPin = true;
-      // Use the new enhanced scheduling interface
       await handleScheduleCommand(ctx);
       return;
     }
     if (action === "preview") {
-      delete ctx.session.draftPreviewMessageId; // Force new preview message
+      delete ctx.session.draftPreviewMessageId;
       await ctx.answerCallbackQuery();
       if (ctx.session.draftLocked) {
         await ctx.reply(
@@ -839,8 +832,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "sendnow") {
-      // Keep draft locked during send operation
-      // Immediate send without scheduling
       const draft = ctx.session.draft;
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
         await ctx.answerCallbackQuery();
@@ -911,7 +902,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           channel: channel._id,
           channelChatId: channel.chatId,
           authorTgId: ctx.from?.id,
-          status: "draft", // Create as draft first
+          status: "draft",
           type: draft.postType || "text",
           text: draft.text?.trim() || undefined,
           mediaFileId: draft.mediaFileId || undefined,
@@ -931,7 +922,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
 
         await ctx.answerCallbackQuery();
 
-        // Check if the current message has media content
         const successMessage = `**Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
 
         try {
@@ -939,10 +929,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
             draft.mediaFileId &&
             (draft.postType === "photo" || draft.postType === "video")
           ) {
-            // Media – cannot edit original draft control message reliably; send new success message
             await ctx.reply(successMessage, { parse_mode: "Markdown" });
           } else {
-            // Text – edit the control/preview message if possible
             try {
               await ctx.editMessageText(successMessage, {
                 parse_mode: "Markdown",
@@ -962,7 +950,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         // Unlock to let user adjust after failure
         delete ctx.session.draftLocked;
 
-        // Try to provide more specific error information
         const sendErrorMessage = async (message: string) => {
           try {
             if (
@@ -995,7 +982,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
             error.message.includes("Personal bot inactive")
           ) {
             await sendErrorMessage(
-              "**Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
+              "**Personal bot issue**\n\nVerify your personal bot is running (/mybot) and relink the channel via that bot /addchannel.",
             );
           } else {
             await sendErrorMessage(`**Error occurred**\n\n${error.message}`);
@@ -1009,7 +996,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
       return;
     }
     if (action === "sendnowpin") {
-      // Keep draft locked during send operation
       // Immediate send with pinning
       const draft = ctx.session.draft;
       if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
@@ -1070,7 +1056,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         return;
       }
 
-      // Provide immediate feedback (avoid silent wait on network)
       try {
         await ctx.answerCallbackQuery({ text: "Sending & pinning…" });
       } catch {}
@@ -1081,7 +1066,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
           channel: channel._id,
           channelChatId: channel.chatId,
           authorTgId: ctx.from?.id,
-          status: "draft", // Create as draft first
+          status: "draft",
           type: draft.postType || "text",
           text: draft.text?.trim() || undefined,
           mediaFileId: draft.mediaFileId || undefined,
@@ -1110,10 +1095,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
             draft.mediaFileId &&
             (draft.postType === "photo" || draft.postType === "video")
           ) {
-            // Media – cannot edit original draft control message reliably; send new success message
             await ctx.reply(successMessage, { parse_mode: "Markdown" });
           } else {
-            // Text – edit the control/preview message if possible
             try {
               await ctx.editMessageText(successMessage, {
                 parse_mode: "Markdown",
@@ -1130,10 +1113,8 @@ export function registerPostCommands(bot: Bot<BotContext>) {
         try {
           await ctx.answerCallbackQuery();
         } catch {}
-        // Unlock to let user adjust after failure
         delete ctx.session.draftLocked;
 
-        // Try to provide more specific error information
         const sendErrorMessage = async (message: string) => {
           try {
             if (
@@ -1166,7 +1147,7 @@ export function registerPostCommands(bot: Bot<BotContext>) {
             error.message.includes("Personal bot inactive")
           ) {
             await sendErrorMessage(
-              "**Personal bot issue**\n\nVerify your personal bot is running (/botstatus) and relink the channel via that bot /addchannel.",
+              "**Personal bot issue**\n\nVerify your personal bot is running (/mybot) and relink the channel via that bot /addchannel.",
             );
           } else {
             await sendErrorMessage(`**Error occurred**\n\n${error.message}`);

@@ -103,7 +103,7 @@ export function registerChannelsCommands(
             "Failed to get chat info via personal bot",
           );
           await ctx.reply(
-            "Cannot access that channel. Ensure this personal bot was added as admin.",
+            "Cannot access channel. Ensure your personal bot is an admin.",
           );
           return;
         }
@@ -129,7 +129,7 @@ export function registerChannelsCommands(
           "Failed to check personal bot membership",
         );
         await ctx.reply(
-          "I can't access that channel member list. Add this personal bot as admin first.",
+          "Unable to access channel member list. Add your personal bot as admin first.",
         );
         return;
       }
@@ -139,7 +139,7 @@ export function registerChannelsCommands(
         (m.status === "administrator" || m.status === "creator");
       if (!canPost) {
         await ctx.reply(
-          "I need permission to post in that channel. Grant posting rights and retry.",
+          "Unable to post in the channel. Grant the permissions and retry.",
         );
         return;
       }

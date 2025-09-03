@@ -10,7 +10,7 @@ import { getPackageInfo } from "../utils/packageInfo";
 const packageInfo = getPackageInfo();
 
 const BOT_INFO = {
-  name: packageInfo.name,
+  name: "Postify",
   version: packageInfo.version,
   description: packageInfo.description,
   developer: "Burhanverse",
@@ -94,7 +94,6 @@ function createHelpMessage(isPersonalBot = false): { text: string; keyboard: Inl
 
 // Enhanced start/about command with comprehensive information
 export function addStartCommand(bot: Bot<BotContext>, isPersonalBot = false) {
-  // Handle both /start and /about commands
   bot.command(["start", "about"], async (ctx) => {
     try {
       const { text, keyboard } = await createAboutMessage(ctx, isPersonalBot);
@@ -210,7 +209,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       if (!ub) return ctx.reply("Already removed.");
       await UserBotModel.deleteOne({ botId: ub.botId });
       await ctx.reply(
-        "Personal bot unlinked. You can /addbot again anytime.",
+        "Unlinked successfully. You can /addbot again anytime.",
       );
       return;
     }
@@ -287,11 +286,11 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
   bot.api
     .setMyCommands([
-      { command: "start", description: "Show bot information" },
-      { command: "about", description: "About Postify Bot" },
+      { command: "start", description: "Start..." },
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
       { command: "unlinkbot", description: "Remove personal bot" },
+      { command: "about", description: "About Postify Bot" },
     ])
     .catch((err) => logger.error({ err }, "setMyCommands failed"));
 }
