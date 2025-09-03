@@ -6,7 +6,6 @@ import { CallbackHandler } from "../services/callbackHandler";
 import { MediaHandler } from "../services/mediaHandler";
 import { TextInputHandler } from "../services/textInputHandler";
 import { PostCommandHandlers } from "../services/postCommandHandlers";
-import { handleScheduleCommand } from "./scheduling";
 
 export function registerPostCommands(bot: Bot<BotContext>) {
   // Handle callback queries
@@ -53,17 +52,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.command("listposts", async (ctx) => {
     await PostCommandHandlers.handleListPosts(ctx);
   });
-
-  // Enhanced schedule command with improved validation and UX
-  bot.command(
-    "schedule",
-    requireSelectedChannel(),
-    requirePostPermission(),
-    wrapCommand(async (ctx) => {
-      const args = typeof ctx.match === "string" ? ctx.match.trim() : "";
-      await handleScheduleCommand(ctx, args);
-    }, "schedule"),
-  );
 
   // Media handlers
   bot.on(["message:photo", "message:video"], async (ctx, next) => {
