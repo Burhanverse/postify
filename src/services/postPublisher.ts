@@ -1,6 +1,6 @@
 import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../telegram/bot";
-import { ChannelModel } from "../models/Channel";
+import { ChannelModel, type ChannelDoc } from "../models/Channel";
 import { PostModel, type Post } from "../models/Post";
 import { Types } from "mongoose";
 import { clearAllDraftData } from "../middleware/sessionCleanup";
@@ -17,8 +17,7 @@ export class PostPublisher {
   /**
    * Validates that the post can be sent
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  static async validatePostSending(ctx: BotContext): Promise<{ success: boolean; channel?: any; error?: string }> {
+  static async validatePostSending(ctx: BotContext): Promise<{ success: boolean; channel?: ChannelDoc; error?: string }> {
     const draft = ctx.session.draft;
     if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
       return { success: false, error: "**Draft is empty!**\n\nAdd text or media content first before sending." };

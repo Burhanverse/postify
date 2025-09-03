@@ -49,7 +49,7 @@ export class ButtonManager {
       if (responseMessage) responseMessage += "\n\n";
       responseMessage += `**${errors.length} error(s) encountered:**\n\n`;
       responseMessage += errors.map(err => `• ${err}`).join('\n');
-      responseMessage += "\n\n**Format reminder:**\n";
+      responseMessage += "\n\n**Format:**\n";
       responseMessage += "• `Button Text | https://example.com` for URL buttons\n";
       responseMessage += "• `Button Text | CALLBACK:key` for callback buttons";
     }

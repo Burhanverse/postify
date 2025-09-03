@@ -1,4 +1,4 @@
-import { Schema, model, InferSchemaType } from "mongoose";
+import { Schema, model, InferSchemaType, HydratedDocument, Types } from "mongoose";
 
 const ChannelSchema = new Schema(
   {
@@ -23,4 +23,5 @@ const ChannelSchema = new Schema(
 ChannelSchema.index({ username: 1 });
 
 export type Channel = InferSchemaType<typeof ChannelSchema>;
+export type ChannelDoc = HydratedDocument<Channel> & { _id: Types.ObjectId };
 export const ChannelModel = model("Channel", ChannelSchema);
