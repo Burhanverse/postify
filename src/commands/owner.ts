@@ -38,14 +38,22 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       };
 
       // Get the bots that were reset before actually resetting them
+      // Only include bots with "error" status, excluding "disabled" ones (invalid tokens)
       const botsToRestart = await UserBotModel.find(
-        { status: "error" },
-        { botId: 1 },
+        { 
+          status: "error",
+          // Exclude bots with 401/token errors that were marked as disabled
+          lastError: { $not: /Invalid\/revoked token/i }
+        },
+        { botId: 1, lastError: 1 },
       );
 
-      // Reset all error bots back to active
+      // Reset all error bots back to active (excluding disabled ones)
       const result = await UserBotModel.updateMany(
-        { status: "error" },
+        { 
+          status: "error",
+          lastError: { $not: /Invalid\/revoked token/i }
+        },
         {
           $set: {
             status: "active",
@@ -120,6 +128,12 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         `Reset ${result.modifiedCount} bots from error to active status`,
       ];
 
+      if (beforeStats.disabled > 0) {
+        message.push("");
+        message.push("⚠️ Disabled bots (invalid tokens) were not reset");
+        message.push("These need new tokens from @BotFather");
+      }
+
       // Add restart results if any bots were restarted
       if (botsToRestart.length > 0) {
         message.push("");
@@ -173,6 +187,12 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         { botId: 1, lastError: 1 },
       ).limit(3);
 
+      // Get some example disabled bots 
+      const disabledBots = await UserBotModel.find(
+        { status: "disabled" },
+        { botId: 1, lastError: 1 },
+      ).limit(3);
+
       const message = [
         "**Personal Bot Status Overview**",
         "",
@@ -194,9 +214,29 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         message.push("");
       }
 
+      if (disabledBots.length > 0) {
+        message.push("**Disabled Bots (Invalid Tokens):**");
+        disabledBots.forEach((bot) => {
+          const error = bot.lastError || "Token issue";
+          message.push(
+            `Bot ${bot.botId}: ${error.substring(0, 50)}${error.length > 50 ? "..." : ""}`,
+          );
+        });
+        message.push("");
+      }
+
       if (stats.error > 0) {
         message.push(
-          "Use /reset_userbots to reset error bots to active status",
+          "Use /reset to reset error bots to active status",
+        );
+      }
+
+      if (stats.disabled > 0) {
+        message.push(
+          `⚠️ ${stats.disabled} bots disabled due to invalid/revoked tokens`,
+        );
+        message.push(
+          "Disabled bots need new tokens from @BotFather to reactivate",
         );
       }
 

@@ -273,33 +273,51 @@ export async function getOrCreateUserBot(botId: number) {
       .catch(async (err) => {
         const errorMessage = err instanceof Error ? err.message : String(err);
         const is409Conflict = errorMessage.includes("409") && errorMessage.includes("Conflict");
+        const is401Unauthorized = errorMessage.includes("401") && errorMessage.includes("Unauthorized");
         
-        logger.error({ err, botId, is409Conflict }, "Failed to start personal bot");
+        logger.error({ err, botId, is409Conflict, is401Unauthorized }, "Failed to start personal bot");
 
         // Mark as failed to prevent immediate retry
         failedBots.add(botId);
 
-        // For 409 conflicts, use longer timeout and more aggressive cleanup
-        const timeoutMinutes = is409Conflict ? 15 : 10;
+        // Different timeout strategies based on error type
+        let timeoutMinutes;
+        if (is401Unauthorized) {
+          // 401 errors are permanent until token is fixed - longer timeout
+          timeoutMinutes = 60; // 1 hour
+        } else if (is409Conflict) {
+          timeoutMinutes = 15;
+        } else {
+          timeoutMinutes = 10;
+        }
+        
         setTimeout(
           () => {
             failedBots.delete(botId);
             logger.debug(
-              { botId, was409: is409Conflict },
+              { botId, was409: is409Conflict, was401: is401Unauthorized },
               "Removed bot from failed list, allowing retry",
             );
           },
           timeoutMinutes * 60 * 1000,
         );
 
-        // Update database status
+        // Update database status - for 401 errors, set status to disabled
+        const newStatus = is401Unauthorized ? "disabled" : "error";
+        const errorPrefix = is401Unauthorized ? "Invalid/revoked token: " : "";
+        
         await UserBotModel.updateOne(
           { botId },
-          { $set: { status: "error", lastError: errorMessage } },
+          { $set: { status: newStatus, lastError: errorPrefix + errorMessage } },
         );
 
-        // For 409 conflicts, be more aggressive about cleanup
-        if (is409Conflict) {
+        // Special handling for different error types
+        if (is401Unauthorized) {
+          logger.warn(
+            { botId },
+            "Bot token is invalid or revoked - bot disabled until token is updated",
+          );
+        } else if (is409Conflict) {
           logger.warn(
             { botId },
             "409 conflict detected, performing aggressive cleanup",
