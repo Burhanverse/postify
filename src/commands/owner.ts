@@ -79,7 +79,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
   });
 
   // Show user bot status overview
-  bot.command("bot_status", async (ctx) => {
+  bot.command("userbots", async (ctx) => {
     if (!isOwner(ctx)) {
       await ctx.reply("This command is only available to the bot owner.");
       return;
