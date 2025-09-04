@@ -9,6 +9,7 @@ import {
   clearFailedBots,
   clearFailedBot,
   getOrCreateUserBot,
+  forceStopBot,
 } from "../services/userBotRegistry";
 
 // Middleware to check if user is the bot owner
@@ -423,6 +424,66 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         "Error in restartbots command",
       );
       await ctx.reply("Error during bot restart. Check logs for details.");
+    }
+  });
+
+  // Force stop a specific bot (for handling persistent 409 conflicts)
+  bot.command("forcestop", async (ctx) => {
+    if (!isOwner(ctx)) {
+      await ctx.reply("This command is only available to the bot owner.");
+      return;
+    }
+
+    const args = ctx.message?.text?.split(" ");
+    if (!args || args.length < 2) {
+      await ctx.reply(
+        "Usage: /forcestop <botId>\n\nExample: /forcestop 123456789\n\nUse /botstatus to see bot IDs.",
+        { parse_mode: "Markdown" }
+      );
+      return;
+    }
+
+    const botIdStr = args[1];
+    const botId = parseInt(botIdStr);
+    
+    if (isNaN(botId)) {
+      await ctx.reply("Invalid bot ID. Please provide a numeric bot ID.");
+      return;
+    }
+
+    try {
+      await ctx.reply(`Force stopping bot ${botId}...`);
+      
+      await forceStopBot(botId);
+      
+      const statusAfter = getBotStatus();
+      
+      const message = [
+        "**Force Stop Complete**",
+        "",
+        `**Bot ID:** ${botId}`,
+        `**Action:** All instances stopped and cleaned up`,
+        "",
+        `**Registry Status After:**`,
+        `Active: ${statusAfter.active}`,
+        `Creating: ${statusAfter.creating}`,
+        `Failed: ${statusAfter.failed}`,
+        "",
+        "Bot can now be restarted cleanly.",
+      ];
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
+      
+      logger.info(
+        { botId, statusAfter, userId: ctx.from?.id },
+        "Owner performed force stop command",
+      );
+    } catch (error) {
+      logger.error(
+        { error, botId, userId: ctx.from?.id },
+        "Error in forcestop command",
+      );
+      await ctx.reply("Error during force stop. Check logs for details.");
     }
   });
 }

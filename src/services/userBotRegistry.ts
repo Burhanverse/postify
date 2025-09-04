@@ -70,7 +70,10 @@ export async function getOrCreateUserBot(botId: number) {
   // If creation is in-flight for the same botId, wait for it instead of
   // creating another Bot instance which would cause a Telegram 409 error.
   const inFlight = creatingBots.get(botId);
-  if (inFlight) return inFlight;
+  if (inFlight) {
+    logger.debug({ botId }, "Bot creation already in progress, waiting for completion");
+    return inFlight;
+  }
 
   // Don't try to restart bots that failed recently
   if (failedBots.has(botId)) {
@@ -81,6 +84,24 @@ export async function getOrCreateUserBot(botId: number) {
     throw new Error(
       `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
     );
+  }
+
+  // Add extra safety: if there's any existing bot instance for this botId, stop it first
+  const existingBot = activeBots.get(botId);
+  if (existingBot) {
+    logger.warn({ botId }, "Found existing bot instance, stopping before creating new one");
+    try {
+      existingBot.isRunning = false;
+      if (existingBot.bot.isRunning()) {
+        await existingBot.bot.stop();
+      }
+    } catch (e) {
+      logger.warn({ e, botId }, "Error stopping existing bot instance");
+    }
+    activeBots.delete(botId);
+    
+    // Add a small delay to ensure the previous instance is fully stopped
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
 
   const creation = (async () => {
@@ -250,33 +271,55 @@ export async function getOrCreateUserBot(botId: number) {
         );
       })
       .catch(async (err) => {
-        logger.error({ err, botId }, "Failed to start personal bot");
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        const is409Conflict = errorMessage.includes("409") && errorMessage.includes("Conflict");
+        
+        logger.error({ err, botId, is409Conflict }, "Failed to start personal bot");
 
         // Mark as failed to prevent immediate retry
         failedBots.add(botId);
 
-        // Set a timer to remove from failed bots after 10 minutes (increased from 5)
+        // For 409 conflicts, use longer timeout and more aggressive cleanup
+        const timeoutMinutes = is409Conflict ? 15 : 10;
         setTimeout(
           () => {
             failedBots.delete(botId);
             logger.debug(
-              { botId },
+              { botId, was409: is409Conflict },
               "Removed bot from failed list, allowing retry",
             );
           },
-          10 * 60 * 1000, // 10 minutes instead of 5
+          timeoutMinutes * 60 * 1000,
         );
 
+        // Update database status
         await UserBotModel.updateOne(
           { botId },
-          { $set: { status: "error", lastError: (err as Error).message } },
+          { $set: { status: "error", lastError: errorMessage } },
         );
+
+        // For 409 conflicts, be more aggressive about cleanup
+        if (is409Conflict) {
+          logger.warn(
+            { botId },
+            "409 conflict detected, performing aggressive cleanup",
+          );
+          
+          // Remove from active bots if somehow still there
+          if (activeBots.has(botId)) {
+            const existingMeta = activeBots.get(botId);
+            if (existingMeta) {
+              existingMeta.isRunning = false;
+            }
+            activeBots.delete(botId);
+          }
+        }
 
         // Stop the bot if it was partially started
         try {
           await bot.stop();
         } catch (e) {
-          // Ignore stop errors
+          logger.debug({ e, botId }, "Error stopping bot during cleanup (expected)");
         }
       });
 
@@ -387,6 +430,36 @@ export function cleanupStaleBots() {
     logger.info({ cleanedCount }, "Cleaned up stale bot instances");
   }
   return cleanedCount;
+}
+
+// Force stop all instances of a specific bot (for handling persistent conflicts)
+export async function forceStopBot(botId: number) {
+  logger.info({ botId }, "Force stopping bot - cleaning up all instances");
+  
+  // Remove from active bots
+  const meta = activeBots.get(botId);
+  if (meta) {
+    try {
+      meta.isRunning = false;
+      if (meta.bot.isRunning()) {
+        await meta.bot.stop();
+      }
+    } catch (e) {
+      logger.debug({ e, botId }, "Error during force stop (expected)");
+    }
+    activeBots.delete(botId);
+  }
+  
+  // Remove from creating bots
+  creatingBots.delete(botId);
+  
+  // Remove from failed bots to allow immediate restart
+  failedBots.delete(botId);
+  
+  // Wait a moment for cleanup to complete
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  logger.info({ botId }, "Force stop completed");
 }
 
 // Get detailed status of all bots

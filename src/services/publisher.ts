@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 import { InlineKeyboard, Bot } from "grammy";
 import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
-import { getOrCreateUserBot } from "./userBotRegistry";
+import { getOrCreateUserBot, forceStopBot } from "./userBotRegistry";
 import { BotContext } from "../telegram/bot";
 
 export async function publishPost(post: Post & { _id: Types.ObjectId }) {
@@ -80,11 +80,42 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
         if (retryCount > maxRetries) {
           logger.error(
             { err, chatId, botId: userBotRecord.botId, attempts: retryCount },
-            "Max retries exceeded for 409 conflict",
+            "Max retries exceeded for 409 conflict - forcing bot cleanup",
           );
+          
+          // Force stop the bot to clean up any zombie instances
+          try {
+            await forceStopBot(userBotRecord.botId);
+            logger.info(
+              { botId: userBotRecord.botId },
+              "Force stopped bot after persistent 409 conflicts",
+            );
+          } catch (forceStopError) {
+            logger.error(
+              { forceStopError, botId: userBotRecord.botId },
+              "Error during force stop",
+            );
+          }
+          
           throw new Error(
-            "Bot instance conflict detected. Multiple retry attempts failed. Please try again later.",
+            "Bot instance conflict detected. Bot has been reset. Please try again in a few moments.",
           );
+        }
+
+        // For retries, force stop the bot first to ensure clean restart
+        if (retryCount === 1) {
+          logger.info(
+            { botId: userBotRecord.botId },
+            "First 409 retry - performing force stop for clean restart",
+          );
+          try {
+            await forceStopBot(userBotRecord.botId);
+          } catch (forceStopError) {
+            logger.warn(
+              { forceStopError, botId: userBotRecord.botId },
+              "Error during force stop before retry",
+            );
+          }
         }
 
         // Wait before retry (exponential backoff)
