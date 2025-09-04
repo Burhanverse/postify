@@ -74,7 +74,13 @@ async function main() {
   } else {
     launchBot();
     await loadAllUserBotsOnStartup();
-    startUserBotSupervisor();
+    
+    // Wait 60 seconds before starting supervisor to allow all personal bots to fully initialize
+    // This prevents the supervisor from interfering with startup bot creation
+    setTimeout(() => {
+      startUserBotSupervisor();
+      logger.info("User bot supervisor started after startup delay");
+    }, 60000);
     
     logger.info("Application started successfully. Press Ctrl+C to stop gracefully.");
   }

@@ -54,31 +54,32 @@ export async function getOrCreateUserBot(botId: number) {
   if (inFlight) return inFlight;
 
   const creation = (async () => {
-    const record = await UserBotModel.findOne({ botId, status: "active" });
-    if (!record) throw new Error("User bot not found or inactive");
-    const rawToken = record.tokenEncrypted
-      ? decrypt(record.tokenEncrypted)
-      : record.token;
-    if (!rawToken) throw new Error("Bot token missing or invalid");
-    const bot = new Bot<BotContext>(rawToken);
+    try {
+      const record = await UserBotModel.findOne({ botId, status: "active" });
+      if (!record) throw new Error("User bot not found or inactive");
+      const rawToken = record.tokenEncrypted
+        ? decrypt(record.tokenEncrypted)
+        : record.token;
+      if (!rawToken) throw new Error("Bot token missing or invalid");
+      const bot = new Bot<BotContext>(rawToken);
 
-    // Ownership guard FIRST
-    bot.use(personalBotOwnershipGuard(record.ownerTgId));
-    bot.use(loggingMiddleware);
-    bot.use(errorHandlerMiddleware);
-    bot.use(session({ initial }));
-    bot.use(validationMiddleware);
-    bot.use(rateLimitMiddleware);
-    bot.use(concurrencyMiddleware);
-    bot.use(userMiddleware);
-    bot.use(sessionCleanupMiddleware);
-    bot.use(messageCleanupMiddleware);
+      // Ownership guard FIRST
+      bot.use(personalBotOwnershipGuard(record.ownerTgId));
+      bot.use(loggingMiddleware);
+      bot.use(errorHandlerMiddleware);
+      bot.use(session({ initial }));
+      bot.use(validationMiddleware);
+      bot.use(rateLimitMiddleware);
+      bot.use(concurrencyMiddleware);
+      bot.use(userMiddleware);
+      bot.use(sessionCleanupMiddleware);
+      bot.use(messageCleanupMiddleware);
 
-    registerPostCommands(bot);
-    registerChannelsCommands(bot, { enableLinking: true });
-    
-    // Add enhanced start/about command for personal bots
-    addStartCommand(bot, true);
+      registerPostCommands(bot);
+      registerChannelsCommands(bot, { enableLinking: true });
+      
+      // Add enhanced start/about command for personal bots
+      addStartCommand(bot, true);
 
     // Check channels command
     bot.command("checkchannels", async (ctx) => {
@@ -153,6 +154,10 @@ export async function getOrCreateUserBot(botId: number) {
       logger.error({ err, botId }, "Unhandled personal bot error");
     });
 
+    // Wait for bot to start before adding to activeBots to prevent race conditions
+    await bot.start({ drop_pending_updates: true });
+    
+    // Only add to activeBots after successful start
     activeBots.set(botId, {
       bot,
       ownerTgId: record.ownerTgId,
@@ -160,23 +165,20 @@ export async function getOrCreateUserBot(botId: number) {
       failures: 0,
       startedAt: new Date(),
     });
-    bot
-      .start({ drop_pending_updates: true })
-      .then(() => {
-        logger.info(
-          { botId, username: record.username, owner: record.ownerTgId },
-          "Personal bot started",
-        );
-      })
-      .catch(async (err) => {
-        logger.error({ err, botId }, "Failed to start personal bot");
-        stopUserBot(botId);
-        await UserBotModel.updateOne(
-          { botId },
-          { $set: { status: "error", lastError: (err as Error).message } },
-        );
-      });
+    
+    logger.info(
+      { botId, username: record.username, owner: record.ownerTgId },
+      "Personal bot started",
+    );
     return bot;
+    } catch (err) {
+      logger.error({ err, botId }, "Failed to start personal bot");
+      await UserBotModel.updateOne(
+        { botId },
+        { $set: { status: "error", lastError: (err as Error).message } },
+      );
+      throw err; // Re-throw to be handled by caller
+    }
   })();
 
   creatingBots.set(botId, creation);
@@ -267,7 +269,7 @@ export function startUserBotSupervisor(intervalMs = 30000) {
       const desired = new Set(activeRecords.map((r) => r.botId));
       // Restart missing
       for (const botId of desired) {
-        if (!activeBots.has(botId)) {
+        if (!activeBots.has(botId) && !creatingBots.has(botId)) {
           logger.warn({ botId }, "Supervisor restarting missing personal bot");
           try {
             await getOrCreateUserBot(botId);
