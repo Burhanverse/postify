@@ -14,7 +14,7 @@
 
 </div>
 
-## Features (Roadmap)
+## Features:
 
 | Area                                  | Status              |
 | ------------------------------------- | ------------------- |
@@ -25,17 +25,16 @@
 | Inline buttons (no counters)          | Implemented         |
 | Scheduling (presets + custom)         | Implemented         |
 | Timezone preferences                  | Implemented         |
-| Queues (scheduled list)               | Testing             |
+| Queues (scheduled list)               | Implemented         |
 | Send/Schedule & Pin the post          | Implemented         |
-| Group Topic Support                   | Planned             |
 | Link personal bot                     | Implemented         |
 
-## Roadmap (Upcoming Ideas)
+## Roadmap (Upcoming Ideas):
 
 - Add support for shared-access to other channel admins
 - Improve text formating of the response messages.
 
-## Development
+## Development:
 
 Create a `.env` file:
 
@@ -57,7 +56,7 @@ npm install
 npm run dev
 ```
 
-### Tests
+### Tests:
 
 Run unit tests:
 
@@ -65,7 +64,7 @@ Run unit tests:
 npm test
 ```
 
-## Text Formatting
+## Text Formatting:
 
 Postify supports rich text formatting using HTML tags:
 
@@ -89,13 +88,16 @@ function hello() {
 <blockquote>This is a quote</blockquote>
 ```
 
-## Credits
+## Credits:
 
 AI assistants that helped in the development of this project:
 
 - Claude 4
 - ChatGPT 5
 - Gemini 2.5 Pro
-- Grok Code
 
-_Made with ❤️ by Burhanverse_
+<div align="center">
+
+<i>Made with ❤️ by Burhanverse</i>
+
+</div>
