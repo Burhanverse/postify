@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 import { InlineKeyboard, Bot } from "grammy";
 import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
-import { getOrCreateUserBot, forceStopBot } from "./userBotRegistry";
+import { getExistingUserBot, getOrCreateUserBot } from "./userBotRegistry";
 import { BotContext } from "../telegram/bot";
 import { decrypt } from "../utils/crypto";
 
@@ -41,15 +41,23 @@ export async function publishPersonal(
     throw new Error("Personal bot not found for channel");
   }
 
-  try {
-    logger.debug(
-      { chatId, botId: userBotRecord.botId },
-      "Publisher: creating API-only bot & checking permissions",
+  // Get existing bot instance from registry
+  const personalBot = getExistingUserBot(userBotRecord.botId);
+  
+  if (!personalBot) {
+    logger.error(
+      { botId: userBotRecord.botId },
+      "Personal bot not found in registry during publishing"
     );
-    
-  // Always use the polling bot instance for personal bots
-  const personalBot = await getOrCreateUserBot(userBotRecord.botId);
-    
+    throw new Error("Personal bot not available for publishing. Bot may still be starting up - please try again in a moment.");
+  }
+
+  logger.debug(
+    { chatId, botId: userBotRecord.botId },
+    "Publisher: using existing bot instance from registry",
+  );
+
+  try {
     const botMember = await personalBot.api.getChatMember(
       chatId,
       userBotRecord.botId,
@@ -63,10 +71,9 @@ export async function publishPersonal(
       "Publisher: permission check passed",
     );
 
-    // Use the API-only bot instance for publishing
+    // Use the polling bot instance for publishing
     return await publishWithBot(post, channel, chatId, personalBot);
   } catch (err) {
-    // For API-only bots, most errors are not recoverable by retry
     logger.warn(
       { err, chatId, botId: userBotRecord.botId },
       "Failed to use personal bot for publishing",
@@ -119,9 +126,9 @@ async function publishWithBot(
   try {
     logger.debug(
       { postId: post._id.toString(), chatId },
-      "Publisher: sending message",
+      "Publisher: sending message using polling bot instance",
     );
-    // Use the existing bot instance instead of calling getOrCreateUserBot again
+    // Use the existing polling bot instance that was passed in
     if (post.type === "photo" && post.mediaFileId) {
       sent = await personalBot.api.sendPhoto(chatId, post.mediaFileId, {
         caption: post.text || undefined,
@@ -148,6 +155,20 @@ async function publishWithBot(
       { err, postId: post._id.toString(), chatId },
       "Failed to send message to Telegram",
     );
+    
+    // Check for specific errors that indicate bot session issues
+    if (err instanceof Error) {
+      const errorMsg = err.message.toLowerCase();
+      if (errorMsg.includes("wrong file identifier") || 
+          errorMsg.includes("bad request") ||
+          errorMsg.includes("file_id")) {
+        logger.error(
+          { err, postId: post._id.toString(), chatId, botId: channel.botId },
+          "File identifier error - likely due to bot session mismatch. Using polling bot instance should prevent this."
+        );
+      }
+    }
+    
     throw err;
   }
 
@@ -165,7 +186,7 @@ async function publishWithBot(
   // Pin the message if requested
   if (post.pinAfterPosting) {
     try {
-      // Use the existing bot instance instead of calling getOrCreateUserBot again
+      // Use the same polling bot instance for pinning
       await personalBot.api.pinChatMessage(chatId, sent.message_id);
 
       await PostModel.updateOne(
@@ -179,7 +200,7 @@ async function publishWithBot(
 
       logger.info(
         { postId: post._id.toString(), messageId: sent.message_id },
-        "Post pinned successfully",
+        "Post pinned successfully using polling bot",
       );
     } catch (err) {
       logger.error(

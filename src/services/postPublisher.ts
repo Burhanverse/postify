@@ -66,13 +66,38 @@ export class PostPublisher {
       botId: channel.botId,
       status: "active",
     });
+    
     if (!userBotRecord) {
+      // Check if there's a bot record with different status
+      const anyBotRecord = await UserBotModel.findOne({ botId: channel.botId });
+      if (anyBotRecord) {
+        return {
+          success: false,
+          error:
+            `**Personal bot has issues**\n\nThe bot linked to this channel has status: "${anyBotRecord.status}". Please use /mybot to check your bot status and fix any issues, or relink this channel to your active personal bot.`,
+        };
+      } else {
+        return {
+          success: false,
+          error:
+            "**Personal bot not found**\n\nThe bot linked to this channel is no longer registered. Please relink this channel to your active personal bot using /addchannel.",
+        };
+      }
+    }
+
+    // Check if bot instance is available in registry (even if still starting up)
+    const { getExistingUserBot } = await import("./userBotRegistry");
+    const botInstance = getExistingUserBot(channel.botId);
+    
+    if (!botInstance) {
       return {
         success: false,
         error:
-          "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
+          "**Personal bot not loaded**\n\nYour personal bot is registered but not loaded in memory. Try restarting the main application or use /mybot to check status.",
       };
     }
+
+    // Bot is available, let the publisher handle the actual API calls
 
     return { success: true, channel };
   }
