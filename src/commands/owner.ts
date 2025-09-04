@@ -7,6 +7,7 @@ import {
   getBotStatus,
   cleanupStaleBots,
   clearFailedBots,
+  clearFailedBot,
   getOrCreateUserBot,
 } from "../services/userBotRegistry";
 
@@ -67,6 +68,13 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         
         for (const botRecord of botsToRestart) {
           try {
+            // Clear this specific bot from failed list first to allow restart
+            clearFailedBot(botRecord.botId);
+            
+            logger.debug(
+              { botId: botRecord.botId },
+              "Attempting to restart bot after reset"
+            );
             await getOrCreateUserBot(botRecord.botId);
             restartResults.success++;
             logger.info(
@@ -78,7 +86,14 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
           } catch (error) {
             restartResults.failed++;
             logger.error(
-              { error, botId: botRecord.botId },
+              { 
+                error: error instanceof Error ? {
+                  message: error.message,
+                  stack: error.stack,
+                  name: error.name
+                } : error,
+                botId: botRecord.botId 
+              },
               "Failed to restart bot after reset"
             );
           }
@@ -210,6 +225,12 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         "",
       ];
 
+      if (status.failed > 0) {
+        message.push("**Failed Bot IDs:**");
+        message.push(status.failedBotIds.join(", "));
+        message.push("");
+      }
+
       if (status.details.length > 0) {
         message.push("**Active Bot Details:**");
         status.details.forEach((bot) => {
@@ -337,6 +358,9 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
 
       for (const botRecord of botsToRestart) {
         try {
+          // Clear this bot from failed list first to allow restart
+          clearFailedBot(botRecord.botId);
+          
           await getOrCreateUserBot(botRecord.botId);
           restartResults.success++;
           logger.info(

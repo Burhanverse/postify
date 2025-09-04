@@ -2,7 +2,7 @@ import { Bot, InlineKeyboard } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 import { UserBotModel } from "../models/UserBot";
-import { getOrCreateUserBot, listActiveUserBots } from "../services/userBotRegistry";
+import { getOrCreateUserBot, listActiveUserBots, clearFailedBot } from "../services/userBotRegistry";
 import { encrypt } from "../utils/crypto";
 import { validateBotTokenFormat } from "../utils/tokens";
 import { getPackageInfo } from "../utils/packageInfo";
@@ -330,6 +330,9 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     try {
       await ctx.reply("Attempting to restart your personal bot...");
       
+      // Clear bot from failed list first
+      clearFailedBot(ub.botId);
+      
       // Try to restart the bot
       await getOrCreateUserBot(ub.botId);
       
@@ -459,6 +462,9 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
 
       try {
         await ctx.answerCallbackQuery({ text: "Restarting bot..." });
+        
+        // Clear bot from failed list first
+        clearFailedBot(botId);
         
         // Try to restart the bot
         await getOrCreateUserBot(botId);

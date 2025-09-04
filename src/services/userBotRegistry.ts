@@ -74,6 +74,10 @@ export async function getOrCreateUserBot(botId: number) {
 
   // Don't try to restart bots that failed recently
   if (failedBots.has(botId)) {
+    logger.warn(
+      { botId, failedBotsCount: failedBots.size },
+      "Bot is in failed list, skipping restart to avoid conflicts"
+    );
     throw new Error(
       `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
     );
@@ -354,6 +358,15 @@ export function clearFailedBots() {
   logger.info("Cleared failed bots list");
 }
 
+// Clear specific bot from failed bots list
+export function clearFailedBot(botId: number) {
+  const wasRemoved = failedBots.delete(botId);
+  if (wasRemoved) {
+    logger.debug({ botId }, "Removed bot from failed list");
+  }
+  return wasRemoved;
+}
+
 // Clean up any stale bot instances that are marked as running but actually stopped
 export function cleanupStaleBots() {
   let cleanedCount = 0;
@@ -376,6 +389,7 @@ export function getBotStatus() {
     active: activeBots.size,
     creating: creatingBots.size,
     failed: failedBots.size,
+    failedBotIds: Array.from(failedBots), // Add this for debugging
     details: Array.from(activeBots.entries()).map(([botId, meta]) => ({
       botId,
       username: meta.username,
