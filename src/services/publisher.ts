@@ -24,6 +24,24 @@ async function createApiOnlyBot(botId: number): Promise<Bot<BotContext>> {
   return bot;
 }
 
+export async function publishPost(post: Post & { _id: Types.ObjectId }) {
+  const channel = await ChannelModel.findById(post.channel);
+  if (!channel) {
+    logger.error({ postId: post._id.toString() }, "Channel not found for post");
+    throw new Error("Channel not found");
+  }
+
+  const chatId = channel.chatId;
+
+  if (channel.botId) {
+    // Personal bot publishing (most common case)
+    return publishPersonal(post, channel, chatId);
+  } else {
+    // Main bot publishing (fallback)
+    throw new Error("Main bot publishing not implemented yet");
+  }
+}
+
 export async function publishPersonal(
   post: Post & { _id: Types.ObjectId },
   channel: ChannelDoc,
