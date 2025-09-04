@@ -37,6 +37,9 @@ const creatingBots = new Map<number, Promise<Bot<BotContext>>>();
 // Track bots that failed during startup to avoid repeated attempts
 const failedBots = new Set<number>();
 
+// Global creation lock to prevent any race conditions
+let globalCreationLock = false;
+
 // Track startup completion
 let startupComplete = false;
 
@@ -55,301 +58,368 @@ function initial(): SessionData {
 }
 
 export async function getOrCreateUserBot(botId: number) {
-  const existing = activeBots.get(botId);
-  if (existing && existing.isRunning) {
-    // Double-check that the bot is actually running
-    if (existing.bot.isRunning()) {
-      return existing.bot;
-    } else {
-      // Bot is marked as running but actually stopped, clean it up
-      logger.warn({ botId }, "Found stale bot entry, cleaning up");
-      activeBots.delete(botId);
+  // Global lock to prevent any concurrent bot creation
+  while (globalCreationLock) {
+    logger.debug({ botId }, "Waiting for global creation lock to release");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  globalCreationLock = true;
+
+  try {
+    const existing = activeBots.get(botId);
+    if (existing && existing.isRunning) {
+      // Double-check that the bot is actually running
+      if (existing.bot.isRunning()) {
+        return existing.bot;
+      } else {
+        // Bot is marked as running but actually stopped, clean it up
+        logger.warn({ botId }, "Found stale bot entry, cleaning up");
+        activeBots.delete(botId);
+      }
     }
-  }
 
-  // If creation is in-flight for the same botId, wait for it instead of
-  // creating another Bot instance which would cause a Telegram 409 error.
-  const inFlight = creatingBots.get(botId);
-  if (inFlight) {
-    logger.debug({ botId }, "Bot creation already in progress, waiting for completion");
-    return inFlight;
-  }
-
-  // Don't try to restart bots that failed recently
-  if (failedBots.has(botId)) {
-    logger.warn(
-      { botId, failedBotsCount: failedBots.size },
-      "Bot is in failed list, skipping restart to avoid conflicts",
-    );
-    throw new Error(
-      `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
-    );
-  }
-
-  // Add extra safety: if there's any existing bot instance for this botId, stop it first
-  const existingBot = activeBots.get(botId);
-  if (existingBot) {
-    logger.warn({ botId }, "Found existing bot instance, stopping before creating new one");
-    try {
-      existingBot.isRunning = false;
-      if (existingBot.bot.isRunning()) {
-        await existingBot.bot.stop();
-      }
-    } catch (e) {
-      logger.warn({ e, botId }, "Error stopping existing bot instance");
+    // If creation is in-flight for the same botId, wait for it instead of
+    // creating another Bot instance which would cause a Telegram 409 error.
+    const inFlight = creatingBots.get(botId);
+    if (inFlight) {
+      logger.debug(
+        { botId },
+        "Bot creation already in progress, waiting for completion",
+      );
+      return inFlight;
     }
-    activeBots.delete(botId);
-    
-    // Add a small delay to ensure the previous instance is fully stopped
-    await new Promise(resolve => setTimeout(resolve, 1000));
-  }
 
-  const creation = (async () => {
-    const record = await UserBotModel.findOne({ botId, status: "active" });
-    if (!record) throw new Error("User bot not found or inactive");
-    const rawToken = record.tokenEncrypted
-      ? decrypt(record.tokenEncrypted)
-      : record.token;
-    if (!rawToken) throw new Error("Bot token missing or invalid");
-    const bot = new Bot<BotContext>(rawToken);
+    // Don't try to restart bots that failed recently
+    if (failedBots.has(botId)) {
+      logger.warn(
+        { botId, failedBotsCount: failedBots.size },
+        "Bot is in failed list, skipping restart to avoid conflicts",
+      );
+      throw new Error(
+        `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
+      );
+    }
 
-    // Ownership guard FIRST
-    bot.use(personalBotOwnershipGuard(record.ownerTgId));
-    bot.use(loggingMiddleware);
-    bot.use(errorHandlerMiddleware);
-    bot.use(session({ initial }));
-    bot.use(validationMiddleware);
-    bot.use(rateLimitMiddleware);
-    bot.use(concurrencyMiddleware);
-    bot.use(userMiddleware);
-    bot.use(sessionCleanupMiddleware);
-    bot.use(messageCleanupMiddleware);
-
-    registerPostCommands(bot);
-    registerChannelsCommands(bot, { enableLinking: true });
-
-    // Add enhanced start/about command for personal bots
-    addStartCommand(bot, true);
-
-    // Check channels command
-    bot.command("checkchannels", async (ctx) => {
-      const userId = ctx.from?.id;
-      if (!userId) {
-        await ctx.reply("Authentication required.");
-        return;
-      }
-
-      const channels = await ChannelModel.find({
-        owners: userId,
-        botId: record.botId,
-      });
-
-      if (!channels.length) {
-        await ctx.reply(
-          "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
-          { parse_mode: "Markdown" },
-        );
-        return;
-      }
-
-      let response = "**Channel Status Check:**\n\n";
-
-      for (const channel of channels) {
-        const channelName =
-          channel.title || channel.username || channel.chatId.toString();
-
-        try {
-          // Test if bot can send to the channel
-          const chatMember = await bot.api.getChatMember(
-            channel.chatId,
-            record.botId,
-          );
-          const canPost =
-            chatMember.status === "administrator" &&
-            (chatMember.can_post_messages === true ||
-              chatMember.can_post_messages === undefined);
-
-          if (canPost) {
-            response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
-          } else {
-            response += `**${channelName}**\nStatus: Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
-          }
-        } catch (error) {
-          response += `**${channelName}**\nStatus: Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+    // IMMEDIATE pre-emptive cleanup: if there's any existing bot instance for this botId, stop it first
+    const existingBot = activeBots.get(botId);
+    if (existingBot) {
+      logger.warn(
+        { botId },
+        "Found existing bot instance, performing immediate cleanup before creating new one",
+      );
+      try {
+        existingBot.isRunning = false;
+        if (existingBot.bot.isRunning()) {
+          await existingBot.bot.stop();
         }
+      } catch (e) {
+        logger.warn(
+          { e, botId },
+          "Error stopping existing bot instance during cleanup",
+        );
       }
+      activeBots.delete(botId);
 
-      response += "*Tip: Re-add this bot as admin to channels showing errors*";
-      await ctx.reply(response, { parse_mode: "Markdown" });
-    });
+      // Add a slightly longer delay to ensure cleanup is complete
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
 
-    bot.on("callback_query:data", async (ctx, next) => {
-      if (await handleChannelCallback(ctx)) return; // handled
-      return next();
-    });
+    const creation = (async () => {
+      const record = await UserBotModel.findOne({ botId, status: "active" });
+      if (!record) throw new Error("User bot not found or inactive");
+      const rawToken = record.tokenEncrypted
+        ? decrypt(record.tokenEncrypted)
+        : record.token;
+      if (!rawToken) throw new Error("Bot token missing or invalid");
+      const bot = new Bot<BotContext>(rawToken);
 
-    bot.api
-      .setMyCommands([
-        { command: "start", description: "Show bot information" },
-        { command: "newpost", description: "Create a new post" },
-        {
-          command: "preview",
-          description: "Force regenerate preview of the post",
-        },
-        { command: "queue", description: "View scheduled posts" },
-        { command: "addchannel", description: "Link a channel to this bot" },
-        { command: "channels", description: "List linked channels" },
-        { command: "checkchannels", description: "Verify channel permissions" },
-        { command: "cancel", description: "Cancel current draft" },
-        { command: "about", description: "About Postify Bot" },
-      ])
-      .catch((err) => {
-        logger.warn({ err, botId }, "Failed setting personal bot commands");
+      // Ownership guard FIRST
+      bot.use(personalBotOwnershipGuard(record.ownerTgId));
+      bot.use(loggingMiddleware);
+      bot.use(errorHandlerMiddleware);
+      bot.use(session({ initial }));
+      bot.use(validationMiddleware);
+      bot.use(rateLimitMiddleware);
+      bot.use(concurrencyMiddleware);
+      bot.use(userMiddleware);
+      bot.use(sessionCleanupMiddleware);
+      bot.use(messageCleanupMiddleware);
+
+      registerPostCommands(bot);
+      registerChannelsCommands(bot, { enableLinking: true });
+
+      // Add enhanced start/about command for personal bots
+      addStartCommand(bot, true);
+
+      // Check channels command
+      bot.command("checkchannels", async (ctx) => {
+        const userId = ctx.from?.id;
+        if (!userId) {
+          await ctx.reply("Authentication required.");
+          return;
+        }
+
+        const channels = await ChannelModel.find({
+          owners: userId,
+          botId: record.botId,
+        });
+
+        if (!channels.length) {
+          await ctx.reply(
+            "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
+            { parse_mode: "Markdown" },
+          );
+          return;
+        }
+
+        let response = "**Channel Status Check:**\n\n";
+
+        for (const channel of channels) {
+          const channelName =
+            channel.title || channel.username || channel.chatId.toString();
+
+          try {
+            // Test if bot can send to the channel
+            const chatMember = await bot.api.getChatMember(
+              channel.chatId,
+              record.botId,
+            );
+            const canPost =
+              chatMember.status === "administrator" &&
+              (chatMember.can_post_messages === true ||
+                chatMember.can_post_messages === undefined);
+
+            if (canPost) {
+              response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
+            } else {
+              response += `**${channelName}**\nStatus: Limited access (Check admin permissions)\nID: \`${channel.chatId}\`\n\n`;
+            }
+          } catch (error) {
+            response += `**${channelName}**\nStatus: Cannot access (Bot may be removed)\nID: \`${channel.chatId}\`\n\n`;
+          }
+        }
+
+        response +=
+          "*Tip: Re-add this bot as admin to channels showing errors*";
+        await ctx.reply(response, { parse_mode: "Markdown" });
       });
 
-    bot.catch((err) => {
-      const meta = activeBots.get(botId);
-      if (meta) {
-        meta.failures += 1;
+      bot.on("callback_query:data", async (ctx, next) => {
+        if (await handleChannelCallback(ctx)) return; // handled
+        return next();
+      });
 
-        // Check if this is a 409 conflict error
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
+      bot.api
+        .setMyCommands([
+          { command: "start", description: "Show bot information" },
+          { command: "newpost", description: "Create a new post" },
+          {
+            command: "preview",
+            description: "Force regenerate preview of the post",
+          },
+          { command: "queue", description: "View scheduled posts" },
+          { command: "addchannel", description: "Link a channel to this bot" },
+          { command: "channels", description: "List linked channels" },
+          {
+            command: "checkchannels",
+            description: "Verify channel permissions",
+          },
+          { command: "cancel", description: "Cancel current draft" },
+          { command: "about", description: "About Postify Bot" },
+        ])
+        .catch((err) => {
+          logger.warn({ err, botId }, "Failed setting personal bot commands");
+        });
+
+      bot.catch((err) => {
+        const meta = activeBots.get(botId);
+        if (meta) {
+          meta.failures += 1;
+
+          // Check if this is a 409 conflict error
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (
+            errorMessage.includes("409") &&
+            errorMessage.includes("Conflict")
+          ) {
+            logger.error(
+              { err, botId, failures: meta.failures },
+              "Telegram 409 conflict detected - multiple instances running",
+            );
+
+            // Mark bot as not running and remove from active bots
+            meta.isRunning = false;
+            activeBots.delete(botId);
+            failedBots.add(botId);
+
+            // Stop the bot instance
+            try {
+              meta.bot.stop();
+            } catch (e) {
+              // Ignore stop errors
+            }
+
+            // Set a longer timeout for 409 errors (15 minutes)
+            setTimeout(
+              () => {
+                failedBots.delete(botId);
+                logger.info(
+                  { botId },
+                  "Removed bot from failed list after 409 conflict, allowing retry",
+                );
+              },
+              15 * 60 * 1000,
+            );
+          }
+        }
+        logger.error({ err, botId }, "Unhandled personal bot error");
+      });
+
+      // Start bot asynchronously and handle registration properly
+      bot
+        .start({ drop_pending_updates: true })
+        .then(() => {
+          // Only add to activeBots AFTER successful start
+          activeBots.set(botId, {
+            bot,
+            ownerTgId: record.ownerTgId,
+            username: record.username || undefined,
+            failures: 0,
+            startedAt: new Date(),
+            isRunning: true,
+          });
+
+          // Remove from failed bots if it was there
+          failedBots.delete(botId);
+
+          logger.info(
+            { botId, username: record.username, owner: record.ownerTgId },
+            "Personal bot started successfully",
+          );
+        })
+        .catch(async (err) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const is409Conflict =
+            errorMessage.includes("409") && errorMessage.includes("Conflict");
+          const is401Unauthorized =
+            errorMessage.includes("401") &&
+            errorMessage.includes("Unauthorized");
+
+          // IMMEDIATE aggressive cleanup for 409 conflicts
+          if (is409Conflict) {
+            logger.warn(
+              { botId },
+              "409 conflict detected - performing IMMEDIATE aggressive cleanup",
+            );
+
+            // Immediately remove from active bots and mark as failed
+            activeBots.delete(botId);
+            failedBots.add(botId);
+
+            // Try to force stop any remaining instances
+            try {
+              await bot.stop();
+            } catch (e) {
+              logger.debug(
+                { e, botId },
+                "Error stopping bot during immediate 409 cleanup",
+              );
+            }
+          }
+
           logger.error(
-            { err, botId, failures: meta.failures },
-            "Telegram 409 conflict detected - multiple instances running",
+            { err, botId, is409Conflict, is401Unauthorized },
+            "Failed to start personal bot",
           );
 
-          // Mark bot as not running and remove from active bots
-          meta.isRunning = false;
-          activeBots.delete(botId);
+          // Mark as failed to prevent immediate retry
           failedBots.add(botId);
 
-          // Stop the bot instance
-          try {
-            meta.bot.stop();
-          } catch (e) {
-            // Ignore stop errors
+          // Different timeout strategies based on error type
+          let timeoutMinutes;
+          if (is401Unauthorized) {
+            // 401 errors are permanent until token is fixed - longer timeout
+            timeoutMinutes = 60; // 1 hour
+          } else if (is409Conflict) {
+            timeoutMinutes = 15;
+          } else {
+            timeoutMinutes = 10;
           }
 
-          // Set a longer timeout for 409 errors (15 minutes)
           setTimeout(
             () => {
               failedBots.delete(botId);
-              logger.info(
-                { botId },
-                "Removed bot from failed list after 409 conflict, allowing retry",
+              logger.debug(
+                { botId, was409: is409Conflict, was401: is401Unauthorized },
+                "Removed bot from failed list, allowing retry",
               );
             },
-            15 * 60 * 1000,
+            timeoutMinutes * 60 * 1000,
           );
-        }
-      }
-      logger.error({ err, botId }, "Unhandled personal bot error");
-    });
 
-    // Start bot asynchronously and handle registration properly
-    bot
-      .start({ drop_pending_updates: true })
-      .then(() => {
-        // Only add to activeBots AFTER successful start
-        activeBots.set(botId, {
-          bot,
-          ownerTgId: record.ownerTgId,
-          username: record.username || undefined,
-          failures: 0,
-          startedAt: new Date(),
-          isRunning: true,
+          // Update database status - for 401 errors, set status to disabled
+          const newStatus = is401Unauthorized ? "disabled" : "error";
+          const errorPrefix = is401Unauthorized
+            ? "Invalid/revoked token: "
+            : "";
+
+          await UserBotModel.updateOne(
+            { botId },
+            {
+              $set: {
+                status: newStatus,
+                lastError: errorPrefix + errorMessage,
+              },
+            },
+          );
+
+          // Special handling for different error types
+          if (is401Unauthorized) {
+            logger.warn(
+              { botId },
+              "Bot token is invalid or revoked - bot disabled until token is updated",
+            );
+          } else if (is409Conflict) {
+            logger.warn(
+              { botId },
+              "409 conflict detected, performing aggressive cleanup",
+            );
+
+            // Remove from active bots if somehow still there
+            if (activeBots.has(botId)) {
+              const existingMeta = activeBots.get(botId);
+              if (existingMeta) {
+                existingMeta.isRunning = false;
+              }
+              activeBots.delete(botId);
+            }
+          }
+
+          // Stop the bot if it was partially started
+          try {
+            await bot.stop();
+          } catch (e) {
+            logger.debug(
+              { e, botId },
+              "Error stopping bot during cleanup (expected)",
+            );
+          }
         });
 
-        // Remove from failed bots if it was there
-        failedBots.delete(botId);
+      return bot;
+    })();
 
-        logger.info(
-          { botId, username: record.username, owner: record.ownerTgId },
-          "Personal bot started successfully",
-        );
-      })
-      .catch(async (err) => {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const is409Conflict = errorMessage.includes("409") && errorMessage.includes("Conflict");
-        const is401Unauthorized = errorMessage.includes("401") && errorMessage.includes("Unauthorized");
-        
-        logger.error({ err, botId, is409Conflict, is401Unauthorized }, "Failed to start personal bot");
-
-        // Mark as failed to prevent immediate retry
-        failedBots.add(botId);
-
-        // Different timeout strategies based on error type
-        let timeoutMinutes;
-        if (is401Unauthorized) {
-          // 401 errors are permanent until token is fixed - longer timeout
-          timeoutMinutes = 60; // 1 hour
-        } else if (is409Conflict) {
-          timeoutMinutes = 15;
-        } else {
-          timeoutMinutes = 10;
-        }
-        
-        setTimeout(
-          () => {
-            failedBots.delete(botId);
-            logger.debug(
-              { botId, was409: is409Conflict, was401: is401Unauthorized },
-              "Removed bot from failed list, allowing retry",
-            );
-          },
-          timeoutMinutes * 60 * 1000,
-        );
-
-        // Update database status - for 401 errors, set status to disabled
-        const newStatus = is401Unauthorized ? "disabled" : "error";
-        const errorPrefix = is401Unauthorized ? "Invalid/revoked token: " : "";
-        
-        await UserBotModel.updateOne(
-          { botId },
-          { $set: { status: newStatus, lastError: errorPrefix + errorMessage } },
-        );
-
-        // Special handling for different error types
-        if (is401Unauthorized) {
-          logger.warn(
-            { botId },
-            "Bot token is invalid or revoked - bot disabled until token is updated",
-          );
-        } else if (is409Conflict) {
-          logger.warn(
-            { botId },
-            "409 conflict detected, performing aggressive cleanup",
-          );
-          
-          // Remove from active bots if somehow still there
-          if (activeBots.has(botId)) {
-            const existingMeta = activeBots.get(botId);
-            if (existingMeta) {
-              existingMeta.isRunning = false;
-            }
-            activeBots.delete(botId);
-          }
-        }
-
-        // Stop the bot if it was partially started
-        try {
-          await bot.stop();
-        } catch (e) {
-          logger.debug({ e, botId }, "Error stopping bot during cleanup (expected)");
-        }
-      });
-
-    return bot;
-  })();
-
-  creatingBots.set(botId, creation);
-  try {
-    const result = await creation;
-    return result;
+    creatingBots.set(botId, creation);
+    try {
+      const result = await creation;
+      return result;
+    } finally {
+      creatingBots.delete(botId);
+    }
   } finally {
-    creatingBots.delete(botId);
+    // Always release the global lock, even if we throw early
+    globalCreationLock = false;
   }
 }
 
@@ -453,7 +523,7 @@ export function cleanupStaleBots() {
 // Force stop all instances of a specific bot (for handling persistent conflicts)
 export async function forceStopBot(botId: number) {
   logger.info({ botId }, "Force stopping bot - cleaning up all instances");
-  
+
   // Remove from active bots
   const meta = activeBots.get(botId);
   if (meta) {
@@ -467,16 +537,16 @@ export async function forceStopBot(botId: number) {
     }
     activeBots.delete(botId);
   }
-  
+
   // Remove from creating bots
   creatingBots.delete(botId);
-  
+
   // Remove from failed bots to allow immediate restart
   failedBots.delete(botId);
-  
+
   // Wait a moment for cleanup to complete
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
   logger.info({ botId }, "Force stop completed");
 }
 

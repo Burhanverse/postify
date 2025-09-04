@@ -82,7 +82,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
             { err, chatId, botId: userBotRecord.botId, attempts: retryCount },
             "Max retries exceeded for 409 conflict - forcing bot cleanup",
           );
-          
+
           // Force stop the bot to clean up any zombie instances
           try {
             await forceStopBot(userBotRecord.botId);
@@ -96,7 +96,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
               "Error during force stop",
             );
           }
-          
+
           throw new Error(
             "Bot instance conflict detected. Bot has been reset. Please try again in a few moments.",
           );

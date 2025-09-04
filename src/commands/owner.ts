@@ -40,19 +40,19 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       // Get the bots that were reset before actually resetting them
       // Only include bots with "error" status, excluding "disabled" ones (invalid tokens)
       const botsToRestart = await UserBotModel.find(
-        { 
+        {
           status: "error",
           // Exclude bots with 401/token errors that were marked as disabled
-          lastError: { $not: /Invalid\/revoked token/i }
+          lastError: { $not: /Invalid\/revoked token/i },
         },
         { botId: 1, lastError: 1 },
       );
 
       // Reset all error bots back to active (excluding disabled ones)
       const result = await UserBotModel.updateMany(
-        { 
+        {
           status: "error",
-          lastError: { $not: /Invalid\/revoked token/i }
+          lastError: { $not: /Invalid\/revoked token/i },
         },
         {
           $set: {
@@ -187,7 +187,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         { botId: 1, lastError: 1 },
       ).limit(3);
 
-      // Get some example disabled bots 
+      // Get some example disabled bots
       const disabledBots = await UserBotModel.find(
         { status: "disabled" },
         { botId: 1, lastError: 1 },
@@ -226,9 +226,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       }
 
       if (stats.error > 0) {
-        message.push(
-          "Use /reset to reset error bots to active status",
-        );
+        message.push("Use /reset to reset error bots to active status");
       }
 
       if (stats.disabled > 0) {
@@ -478,14 +476,14 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
     if (!args || args.length < 2) {
       await ctx.reply(
         "Usage: /forcestop <botId>\n\nExample: /forcestop 123456789\n\nUse /botstatus to see bot IDs.",
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
       return;
     }
 
     const botIdStr = args[1];
     const botId = parseInt(botIdStr);
-    
+
     if (isNaN(botId)) {
       await ctx.reply("Invalid bot ID. Please provide a numeric bot ID.");
       return;
@@ -493,11 +491,11 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
 
     try {
       await ctx.reply(`Force stopping bot ${botId}...`);
-      
+
       await forceStopBot(botId);
-      
+
       const statusAfter = getBotStatus();
-      
+
       const message = [
         "**Force Stop Complete**",
         "",
@@ -513,7 +511,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       ];
 
       await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
-      
+
       logger.info(
         { botId, statusAfter, userId: ctx.from?.id },
         "Owner performed force stop command",
