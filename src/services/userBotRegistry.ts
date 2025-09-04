@@ -22,6 +22,7 @@ interface ActiveBotMeta {
   username?: string;
   failures: number;
   startedAt: Date;
+  isRunning?: boolean; // Track if bot is actually running
 }
 
 const activeBots = new Map<number, ActiveBotMeta>();
@@ -29,6 +30,12 @@ const activeBots = new Map<number, ActiveBotMeta>();
 // Track bots that are currently being created to avoid races that would
 // spawn multiple Bot instances for the same token (causes Telegram 409).
 const creatingBots = new Map<number, Promise<Bot<BotContext>>>();
+
+// Track bots that failed during startup to avoid repeated attempts
+const failedBots = new Set<number>();
+
+// Track startup completion
+let startupComplete = false;
 
 // Ownership guard middleware
 function personalBotOwnershipGuard(ownerId: number) {
@@ -53,33 +60,37 @@ export async function getOrCreateUserBot(botId: number) {
   const inFlight = creatingBots.get(botId);
   if (inFlight) return inFlight;
 
+  // Don't try to restart bots that failed recently
+  if (failedBots.has(botId)) {
+    throw new Error(`Bot ${botId} recently failed, skipping restart to avoid conflicts`);
+  }
+
   const creation = (async () => {
-    try {
-      const record = await UserBotModel.findOne({ botId, status: "active" });
-      if (!record) throw new Error("User bot not found or inactive");
-      const rawToken = record.tokenEncrypted
-        ? decrypt(record.tokenEncrypted)
-        : record.token;
-      if (!rawToken) throw new Error("Bot token missing or invalid");
-      const bot = new Bot<BotContext>(rawToken);
+    const record = await UserBotModel.findOne({ botId, status: "active" });
+    if (!record) throw new Error("User bot not found or inactive");
+    const rawToken = record.tokenEncrypted
+      ? decrypt(record.tokenEncrypted)
+      : record.token;
+    if (!rawToken) throw new Error("Bot token missing or invalid");
+    const bot = new Bot<BotContext>(rawToken);
 
-      // Ownership guard FIRST
-      bot.use(personalBotOwnershipGuard(record.ownerTgId));
-      bot.use(loggingMiddleware);
-      bot.use(errorHandlerMiddleware);
-      bot.use(session({ initial }));
-      bot.use(validationMiddleware);
-      bot.use(rateLimitMiddleware);
-      bot.use(concurrencyMiddleware);
-      bot.use(userMiddleware);
-      bot.use(sessionCleanupMiddleware);
-      bot.use(messageCleanupMiddleware);
+    // Ownership guard FIRST
+    bot.use(personalBotOwnershipGuard(record.ownerTgId));
+    bot.use(loggingMiddleware);
+    bot.use(errorHandlerMiddleware);
+    bot.use(session({ initial }));
+    bot.use(validationMiddleware);
+    bot.use(rateLimitMiddleware);
+    bot.use(concurrencyMiddleware);
+    bot.use(userMiddleware);
+    bot.use(sessionCleanupMiddleware);
+    bot.use(messageCleanupMiddleware);
 
-      registerPostCommands(bot);
-      registerChannelsCommands(bot, { enableLinking: true });
-      
-      // Add enhanced start/about command for personal bots
-      addStartCommand(bot, true);
+    registerPostCommands(bot);
+    registerChannelsCommands(bot, { enableLinking: true });
+    
+    // Add enhanced start/about command for personal bots
+    addStartCommand(bot, true);
 
     // Check channels command
     bot.command("checkchannels", async (ctx) => {
@@ -154,31 +165,54 @@ export async function getOrCreateUserBot(botId: number) {
       logger.error({ err, botId }, "Unhandled personal bot error");
     });
 
-    // Wait for bot to start before adding to activeBots to prevent race conditions
-    await bot.start({ drop_pending_updates: true });
+    // Start bot asynchronously and handle registration properly
+    bot
+      .start({ drop_pending_updates: true })
+      .then(() => {
+        // Only add to activeBots AFTER successful start
+        activeBots.set(botId, {
+          bot,
+          ownerTgId: record.ownerTgId,
+          username: record.username || undefined,
+          failures: 0,
+          startedAt: new Date(),
+          isRunning: true,
+        });
+        
+        // Remove from failed bots if it was there
+        failedBots.delete(botId);
+        
+        logger.info(
+          { botId, username: record.username, owner: record.ownerTgId },
+          "Personal bot started",
+        );
+      })
+      .catch(async (err) => {
+        logger.error({ err, botId }, "Failed to start personal bot");
+        
+        // Mark as failed to prevent immediate retry
+        failedBots.add(botId);
+        
+        // Set a timer to remove from failed bots after 5 minutes
+        setTimeout(() => {
+          failedBots.delete(botId);
+          logger.debug({ botId }, "Removed bot from failed list, allowing retry");
+        }, 5 * 60 * 1000);
+        
+        await UserBotModel.updateOne(
+          { botId },
+          { $set: { status: "error", lastError: (err as Error).message } },
+        );
+        
+        // Stop the bot if it was partially started
+        try {
+          bot.stop();
+        } catch (e) {
+          // Ignore stop errors
+        }
+      });
     
-    // Only add to activeBots after successful start
-    activeBots.set(botId, {
-      bot,
-      ownerTgId: record.ownerTgId,
-      username: record.username || undefined,
-      failures: 0,
-      startedAt: new Date(),
-    });
-    
-    logger.info(
-      { botId, username: record.username, owner: record.ownerTgId },
-      "Personal bot started",
-    );
     return bot;
-    } catch (err) {
-      logger.error({ err, botId }, "Failed to start personal bot");
-      await UserBotModel.updateOne(
-        { botId },
-        { $set: { status: "error", lastError: (err as Error).message } },
-      );
-      throw err; // Re-throw to be handled by caller
-    }
   })();
 
   creatingBots.set(botId, creation);
@@ -238,82 +272,62 @@ export function listActiveUserBots() {
   return [...activeBots.keys()];
 }
 
+export function clearFailedBots() {
+  failedBots.clear();
+  logger.info("Cleared failed bots list");
+}
+
 export async function loadAllUserBotsOnStartup() {
-  const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
-  logger.info({ count: records.length }, "Loading personal bots on startup");
-  for (const rec of records) {
-    try {
-      await getOrCreateUserBot(rec.botId);
-    } catch (err) {
-      logger.error(
-        { err, botId: rec.botId },
-        "Failed to launch personal bot on startup",
-      );
+  try {
+    const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
+    logger.info({ count: records.length }, "Loading personal bots on startup");
+    
+    if (records.length === 0) {
+      // Check if there are any user bots at all
+      const totalCount = await UserBotModel.countDocuments();
+      const activeCount = await UserBotModel.countDocuments({ status: "active" });
+      const disabledCount = await UserBotModel.countDocuments({ status: "disabled" });
+      const errorCount = await UserBotModel.countDocuments({ status: "error" });
+      
+      logger.info({ 
+        totalCount, 
+        activeCount, 
+        disabledCount, 
+        errorCount 
+      }, "User bot status breakdown - no active bots found");
+      startupComplete = true;
+      return;
     }
+    
+    // Start bots sequentially instead of in parallel to avoid conflicts
+    for (const [index, rec] of records.entries()) {
+      try {
+        // Wait 3 seconds between each bot start to ensure no overlap
+        if (index > 0) {
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+        
+        logger.info({ botId: rec.botId, owner: rec.ownerTgId }, "Starting personal bot");
+        await getOrCreateUserBot(rec.botId);
+        
+        // Wait a bit more to ensure the bot is fully started before continuing
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (err) {
+        logger.error(
+          { err, botId: rec.botId },
+          "Failed to launch personal bot on startup",
+        );
+      }
+    }
+    
+    startupComplete = true;
+    logger.info("Personal bot startup complete");
+  } catch (err) {
+    logger.error({ err }, "Error in loadAllUserBotsOnStartup");
+    startupComplete = true;
   }
 }
 
-// Simple supervisor loop: checks for bots marked active but not running, restarts; also demotes bots with many failures.
-let supervisorStarted = false;
-let supervisorInterval: NodeJS.Timeout | null = null;
-
-export function startUserBotSupervisor(intervalMs = 30000) {
-  if (supervisorStarted) return;
-  supervisorStarted = true;
-  supervisorInterval = setInterval(async () => {
-    try {
-      const activeRecords = await UserBotModel.find(
-        { status: "active" },
-        { botId: 1, ownerTgId: 1 },
-      );
-      const desired = new Set(activeRecords.map((r) => r.botId));
-      // Restart missing
-      for (const botId of desired) {
-        if (!activeBots.has(botId) && !creatingBots.has(botId)) {
-          logger.warn({ botId }, "Supervisor restarting missing personal bot");
-          try {
-            await getOrCreateUserBot(botId);
-          } catch (e) {
-            logger.error({ e, botId }, "Restart failed");
-          }
-        }
-      }
-      // Stop stray bots (status changed)
-      for (const running of activeBots.keys()) {
-        if (!desired.has(running)) {
-          logger.info(
-            { botId: running },
-            "Stopping personal bot no longer active",
-          );
-          stopUserBot(running);
-        }
-      }
-      // Failure demotion
-      for (const [botId, meta] of activeBots) {
-        if (meta.failures >= 5) {
-          logger.error(
-            { botId },
-            "Too many failures; marking user bot error and stopping",
-          );
-          stopUserBot(botId);
-          await UserBotModel.updateOne(
-            { botId },
-            { $set: { status: "error", lastError: "Too many runtime errors" } },
-          );
-        }
-      }
-    } catch (err) {
-      logger.error({ err }, "Supervisor iteration error");
-    }
-  }, intervalMs);
-  supervisorInterval.unref();
-}
-
-export function stopUserBotSupervisor() {
-  if (supervisorInterval) {
-    clearInterval(supervisorInterval);
-    supervisorInterval = null;
-    supervisorStarted = false;
-    logger.info("User bot supervisor stopped");
-  }
-}
+// Supervisor removed: Sequential startup prevents race conditions, supervisor was causing 409 conflicts
+// Personal bots work reliably once started, no restart logic needed

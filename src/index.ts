@@ -3,14 +3,11 @@ import { initAgenda, shutdownAgenda } from "./services/agenda";
 import { launchBot, stopBot } from "./telegram/bot";
 import {
   loadAllUserBotsOnStartup,
-  startUserBotSupervisor,
   stopAllUserBots,
-  stopUserBotSupervisor,
 } from "./services/userBotRegistry";
 import { logger } from "./utils/logger";
 import { env } from "./config/env";
 
-// Track if shutdown is in progress to prevent multiple shutdown attempts
 let isShuttingDown = false;
 
 async function gracefulShutdown(signal: string) {
@@ -23,10 +20,6 @@ async function gracefulShutdown(signal: string) {
   logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
 
   try {
-    // Stop the supervisor first to prevent it from restarting bots
-    stopUserBotSupervisor();
-    
-    // Stop all personal bots first to avoid Telegram API conflicts
     await stopAllUserBots();
     
     // Stop the main bot
@@ -45,7 +38,6 @@ async function gracefulShutdown(signal: string) {
 
 // Setup signal handlers for graceful shutdown
 function setupSignalHandlers() {
-  // Handle standard termination signals
   process.on('SIGINT', () => gracefulShutdown('SIGINT'));
   process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
   
@@ -62,7 +54,6 @@ function setupSignalHandlers() {
 }
 
 async function main() {
-  // Setup signal handlers early
   setupSignalHandlers();
   
   await connectDb();
@@ -74,13 +65,6 @@ async function main() {
   } else {
     launchBot();
     await loadAllUserBotsOnStartup();
-    
-    // Wait 60 seconds before starting supervisor to allow all personal bots to fully initialize
-    // This prevents the supervisor from interfering with startup bot creation
-    setTimeout(() => {
-      startUserBotSupervisor();
-      logger.info("User bot supervisor started after startup delay");
-    }, 60000);
     
     logger.info("Application started successfully. Press Ctrl+C to stop gracefully.");
   }

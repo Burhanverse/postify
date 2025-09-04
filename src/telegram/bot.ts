@@ -3,6 +3,7 @@ import { env } from "../config/env";
 import { registerCoreCommands } from "../commands/core";
 import { registerPostCommands } from "../commands/posts";
 import { registerAdminCommands } from "../commands/admins";
+import { registerOwnerCommands } from "../commands/owner";
 import { userMiddleware } from "../middleware/user";
 import { errorHandlerMiddleware } from "../middleware/errorHandler";
 import { rateLimitMiddleware } from "../middleware/rateLimiter";
@@ -70,11 +71,10 @@ bot.use(sessionCleanupMiddleware);
 registerCoreCommands(bot);
 registerPostCommands(bot);
 registerAdminCommands(bot);
+registerOwnerCommands(bot);
 
 // Callback dispatcher
 bot.on("callback_query:data", async (_ctx) => {
-  // Main bot doesn't handle channel callbacks anymore
-  // They are handled in user bots
 });
 
 // Enhanced error handling
