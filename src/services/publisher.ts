@@ -8,21 +8,7 @@ import { getOrCreateUserBot, forceStopBot } from "./userBotRegistry";
 import { BotContext } from "../telegram/bot";
 import { decrypt } from "../utils/crypto";
 
-// Create an API-only bot instance for publishing (no polling/getUpdates)
-async function createApiOnlyBot(botId: number): Promise<Bot<BotContext>> {
-  const record = await UserBotModel.findOne({ botId, status: "active" });
-  if (!record) throw new Error("User bot not found or inactive");
-  
-  const rawToken = record.tokenEncrypted
-    ? decrypt(record.tokenEncrypted)
-    : record.token;
-  if (!rawToken) throw new Error("Bot token missing or invalid");
-  
-  // Create bot instance WITHOUT starting polling - only for API calls
-  const bot = new Bot<BotContext>(rawToken);
-  
-  return bot;
-}
+// Removed createApiOnlyBot. Always use the polling bot instance for personal bots.
 
 export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   const channel = await ChannelModel.findById(post.channel);
@@ -61,8 +47,8 @@ export async function publishPersonal(
       "Publisher: creating API-only bot & checking permissions",
     );
     
-    // Use API-only bot instead of full bot instance to avoid 409 conflicts
-    const personalBot = await createApiOnlyBot(userBotRecord.botId);
+  // Always use the polling bot instance for personal bots
+  const personalBot = await getOrCreateUserBot(userBotRecord.botId);
     
     const botMember = await personalBot.api.getChatMember(
       chatId,
