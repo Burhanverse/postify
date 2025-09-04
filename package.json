@@ -1,6 +1,6 @@
 {
   "name": "postify",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!",
   "private": true,
   "type": "module",
