@@ -12,7 +12,10 @@ import { userMiddleware } from "../middleware/user";
 import { sessionCleanupMiddleware } from "../middleware/sessionCleanup";
 import { messageCleanupMiddleware } from "../middleware/messageCleanup";
 import { registerPostCommands } from "../commands/posts";
-import { registerChannelsCommands, handleChannelCallback } from "../commands/channels";
+import {
+  registerChannelsCommands,
+  handleChannelCallback,
+} from "../commands/channels";
 import { addStartCommand } from "../commands/core";
 import { decrypt } from "../utils/crypto.js";
 
@@ -62,7 +65,9 @@ export async function getOrCreateUserBot(botId: number) {
 
   // Don't try to restart bots that failed recently
   if (failedBots.has(botId)) {
-    throw new Error(`Bot ${botId} recently failed, skipping restart to avoid conflicts`);
+    throw new Error(
+      `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
+    );
   }
 
   const creation = (async () => {
@@ -88,7 +93,7 @@ export async function getOrCreateUserBot(botId: number) {
 
     registerPostCommands(bot);
     registerChannelsCommands(bot, { enableLinking: true });
-    
+
     // Add enhanced start/about command for personal bots
     addStartCommand(bot, true);
 
@@ -100,30 +105,36 @@ export async function getOrCreateUserBot(botId: number) {
         return;
       }
 
-      const channels = await ChannelModel.find({ 
+      const channels = await ChannelModel.find({
         owners: userId,
-        botId: record.botId 
+        botId: record.botId,
       });
-      
+
       if (!channels.length) {
         await ctx.reply(
           "**No channels linked to this bot**\n\nUse /addchannel to link channels to this personal bot.",
-          { parse_mode: "Markdown" }
+          { parse_mode: "Markdown" },
         );
         return;
       }
 
       let response = "**Channel Status Check:**\n\n";
-      
+
       for (const channel of channels) {
-        const channelName = channel.title || channel.username || channel.chatId.toString();
-        
+        const channelName =
+          channel.title || channel.username || channel.chatId.toString();
+
         try {
           // Test if bot can send to the channel
-          const chatMember = await bot.api.getChatMember(channel.chatId, record.botId);
-          const canPost = chatMember.status === "administrator" && 
-                         (chatMember.can_post_messages === true || chatMember.can_post_messages === undefined);
-          
+          const chatMember = await bot.api.getChatMember(
+            channel.chatId,
+            record.botId,
+          );
+          const canPost =
+            chatMember.status === "administrator" &&
+            (chatMember.can_post_messages === true ||
+              chatMember.can_post_messages === undefined);
+
           if (canPost) {
             response += `**${channelName}**\nStatus: Ready (Admin with posting rights)\nID: \`${channel.chatId}\`\n\n`;
           } else {
@@ -147,7 +158,10 @@ export async function getOrCreateUserBot(botId: number) {
       .setMyCommands([
         { command: "start", description: "Show bot information" },
         { command: "newpost", description: "Create a new post" },
-        { command: "preview", description: "Force regenerate preview of the post" },
+        {
+          command: "preview",
+          description: "Force regenerate preview of the post",
+        },
         { command: "queue", description: "View scheduled posts" },
         { command: "addchannel", description: "Link a channel to this bot" },
         { command: "channels", description: "List linked channels" },
@@ -178,10 +192,10 @@ export async function getOrCreateUserBot(botId: number) {
           startedAt: new Date(),
           isRunning: true,
         });
-        
+
         // Remove from failed bots if it was there
         failedBots.delete(botId);
-        
+
         logger.info(
           { botId, username: record.username, owner: record.ownerTgId },
           "Personal bot started",
@@ -189,21 +203,27 @@ export async function getOrCreateUserBot(botId: number) {
       })
       .catch(async (err) => {
         logger.error({ err, botId }, "Failed to start personal bot");
-        
+
         // Mark as failed to prevent immediate retry
         failedBots.add(botId);
-        
+
         // Set a timer to remove from failed bots after 5 minutes
-        setTimeout(() => {
-          failedBots.delete(botId);
-          logger.debug({ botId }, "Removed bot from failed list, allowing retry");
-        }, 5 * 60 * 1000);
-        
+        setTimeout(
+          () => {
+            failedBots.delete(botId);
+            logger.debug(
+              { botId },
+              "Removed bot from failed list, allowing retry",
+            );
+          },
+          5 * 60 * 1000,
+        );
+
         await UserBotModel.updateOne(
           { botId },
           { $set: { status: "error", lastError: (err as Error).message } },
         );
-        
+
         // Stop the bot if it was partially started
         try {
           bot.stop();
@@ -211,7 +231,7 @@ export async function getOrCreateUserBot(botId: number) {
           // Ignore stop errors
         }
       });
-    
+
     return bot;
   })();
 
@@ -238,33 +258,44 @@ export function stopUserBot(botId: number) {
 
 export async function stopAllUserBots() {
   logger.info({ count: activeBots.size }, "Stopping all personal bots");
-  
-  const stopPromises = Array.from(activeBots.entries()).map(async ([botId, meta]) => {
-    try {
-      // Check if bot is already stopped or stopping
-      if (meta.bot.isRunning()) {
-        await meta.bot.stop();
-        logger.debug({ botId, username: meta.username }, "Personal bot stopped");
-      } else {
-        logger.debug({ botId, username: meta.username }, "Personal bot was already stopped");
+
+  const stopPromises = Array.from(activeBots.entries()).map(
+    async ([botId, meta]) => {
+      try {
+        // Check if bot is already stopped or stopping
+        if (meta.bot.isRunning()) {
+          await meta.bot.stop();
+          logger.debug(
+            { botId, username: meta.username },
+            "Personal bot stopped",
+          );
+        } else {
+          logger.debug(
+            { botId, username: meta.username },
+            "Personal bot was already stopped",
+          );
+        }
+      } catch (e) {
+        // Log but don't fail the shutdown process for individual bot failures
+        logger.warn(
+          { e, botId, username: meta.username },
+          "Error stopping personal bot during shutdown",
+        );
       }
-    } catch (e) {
-      // Log but don't fail the shutdown process for individual bot failures
-      logger.warn({ e, botId, username: meta.username }, "Error stopping personal bot during shutdown");
-    }
-  });
+    },
+  );
 
   // Wait for all stop operations to complete (or timeout after 10 seconds)
   await Promise.race([
     Promise.allSettled(stopPromises),
-    new Promise(resolve => setTimeout(resolve, 10000))
+    new Promise((resolve) => setTimeout(resolve, 10000)),
   ]);
-  
+
   activeBots.clear();
-  
+
   // Clear any in-flight bot creation processes
   creatingBots.clear();
-  
+
   logger.info("All personal bots shutdown process completed");
 }
 
@@ -281,38 +312,47 @@ export async function loadAllUserBotsOnStartup() {
   try {
     const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
     logger.info({ count: records.length }, "Loading personal bots on startup");
-    
+
     if (records.length === 0) {
       // Check if there are any user bots at all
       const totalCount = await UserBotModel.countDocuments();
-      const activeCount = await UserBotModel.countDocuments({ status: "active" });
-      const disabledCount = await UserBotModel.countDocuments({ status: "disabled" });
+      const activeCount = await UserBotModel.countDocuments({
+        status: "active",
+      });
+      const disabledCount = await UserBotModel.countDocuments({
+        status: "disabled",
+      });
       const errorCount = await UserBotModel.countDocuments({ status: "error" });
-      
-      logger.info({ 
-        totalCount, 
-        activeCount, 
-        disabledCount, 
-        errorCount 
-      }, "User bot status breakdown - no active bots found");
+
+      logger.info(
+        {
+          totalCount,
+          activeCount,
+          disabledCount,
+          errorCount,
+        },
+        "User bot status breakdown - no active bots found",
+      );
       startupComplete = true;
       return;
     }
-    
+
     // Start bots sequentially instead of in parallel to avoid conflicts
     for (const [index, rec] of records.entries()) {
       try {
         // Wait 3 seconds between each bot start to ensure no overlap
         if (index > 0) {
-          await new Promise(resolve => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 3000));
         }
-        
-        logger.info({ botId: rec.botId, owner: rec.ownerTgId }, "Starting personal bot");
+
+        logger.info(
+          { botId: rec.botId, owner: rec.ownerTgId },
+          "Starting personal bot",
+        );
         await getOrCreateUserBot(rec.botId);
-        
+
         // Wait a bit more to ensure the bot is fully started before continuing
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       } catch (err) {
         logger.error(
           { err, botId: rec.botId },
@@ -320,7 +360,7 @@ export async function loadAllUserBotsOnStartup() {
         );
       }
     }
-    
+
     startupComplete = true;
     logger.info("Personal bot startup complete");
   } catch (err) {

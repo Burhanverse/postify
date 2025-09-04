@@ -57,7 +57,10 @@ export class ChannelSelector {
   /**
    * Handles channel selection callback
    */
-  static async handleChannelSelection(ctx: BotContext, chatId: string): Promise<void> {
+  static async handleChannelSelection(
+    ctx: BotContext,
+    chatId: string,
+  ): Promise<void> {
     const chatIdNum = Number(chatId);
     const channel = await ChannelModel.findOne({
       chatId: chatIdNum,
@@ -78,14 +81,19 @@ export class ChannelSelector {
   /**
    * Selects a channel and starts draft creation
    */
-  static async selectChannelAndStartDraft(ctx: BotContext, chatId: number, isCallback: boolean = false): Promise<void> {
+  static async selectChannelAndStartDraft(
+    ctx: BotContext,
+    chatId: number,
+    isCallback: boolean = false,
+  ): Promise<void> {
     const channel = await ChannelModel.findOne({
       chatId,
       owners: ctx.from?.id,
     });
 
     if (!channel) {
-      const message = "**Error:** Channel not found or access denied.\n\nPlease use /addchannel to link a valid channel.";
+      const message =
+        "**Error:** Channel not found or access denied.\n\nPlease use /addchannel to link a valid channel.";
       if (isCallback) {
         await ctx.editMessageText(message, { parse_mode: "Markdown" });
       } else {
@@ -98,7 +106,7 @@ export class ChannelSelector {
     ctx.session.selectedChannelChatId = chatId;
     DraftManager.initializeDraft(ctx);
 
-    const draftStartMessage = 
+    const draftStartMessage =
       `**Channel Selected:** ${channel.title || channel.username || chatId}\n\n` +
       "**Draft started!**\n\n" +
       "Send text to add to your draft. Use HTML tags for formatting:\n" +
@@ -114,7 +122,7 @@ export class ChannelSelector {
     } else {
       await ctx.reply(draftStartMessage, { parse_mode: "Markdown" });
     }
-    
+
     await DraftManager.renderDraftPreview(ctx);
   }
 

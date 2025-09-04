@@ -12,23 +12,23 @@ export class CallbackHandler {
    */
   static async handleCallback(ctx: BotContext, data: string): Promise<boolean> {
     // Handle queue callbacks
-    if (data.startsWith('queue_sendnow:')) {
+    if (data.startsWith("queue_sendnow:")) {
       await ctx.answerCallbackQuery();
-      const postId = data.split(':')[1];
+      const postId = data.split(":")[1];
       await QueueManager.handleSendNow(ctx, postId);
       return true;
     }
 
-    if (data.startsWith('queue_cancel:')) {
+    if (data.startsWith("queue_cancel:")) {
       await ctx.answerCallbackQuery();
-      const postId = data.split(':')[1];
+      const postId = data.split(":")[1];
       await QueueManager.handleCancelScheduled(ctx, postId);
       return true;
     }
 
-    if (data.startsWith('queue:select:')) {
+    if (data.startsWith("queue:select:")) {
       await ctx.answerCallbackQuery();
-      const chatId = data.split(':')[2];
+      const chatId = data.split(":")[2];
       await QueueManager.handleQueueChannelSelection(ctx, chatId);
       return true;
     }
@@ -51,7 +51,14 @@ export class CallbackHandler {
     }
 
     // Handle scheduling callbacks
-    if (data && await handleScheduleCallback(ctx, data.split(":")[0], data.split(":").slice(1).join(":"))) {
+    if (
+      data &&
+      (await handleScheduleCallback(
+        ctx,
+        data.split(":")[0],
+        data.split(":").slice(1).join(":"),
+      ))
+    ) {
       return true;
     }
 
@@ -79,9 +86,12 @@ export class CallbackHandler {
   /**
    * Handles draft-specific callbacks
    */
-  private static async handleDraftCallback(ctx: BotContext, data: string): Promise<boolean> {
+  private static async handleDraftCallback(
+    ctx: BotContext,
+    data: string,
+  ): Promise<boolean> {
     if (!data.startsWith("draft:")) return false;
-    
+
     if (!ctx.session.draft) {
       await ctx.answerCallbackQuery();
       await ctx.reply(
@@ -165,14 +175,17 @@ export class CallbackHandler {
 
       case "schedule":
         await ctx.answerCallbackQuery();
-        const { handleScheduleCommand } = await import("../commands/scheduling");
+        const { handleScheduleCommand } = await import(
+          "../commands/scheduling"
+        );
         await handleScheduleCommand(ctx);
         return true;
 
       case "schedulepin":
         await ctx.answerCallbackQuery();
         ctx.session.scheduleWithPin = true;
-        const { handleScheduleCommand: handleScheduleCommandPin } = await import("../commands/scheduling");
+        const { handleScheduleCommand: handleScheduleCommandPin } =
+          await import("../commands/scheduling");
         await handleScheduleCommandPin(ctx);
         return true;
 

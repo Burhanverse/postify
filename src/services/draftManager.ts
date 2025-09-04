@@ -2,7 +2,10 @@ import { InlineKeyboard } from "grammy";
 import type { BotContext } from "../telegram/bot";
 import { formatToHtml } from "../utils/format";
 import { logger } from "../utils/logger";
-import { clearAllDraftData, initializeCleanDraftSession } from "../middleware/sessionCleanup";
+import {
+  clearAllDraftData,
+  initializeCleanDraftSession,
+} from "../middleware/sessionCleanup";
 import { cleanupOldDraftPreview } from "../middleware/messageCleanup";
 
 export type DraftButton = { text: string; url?: string; callbackData?: string };
@@ -24,9 +27,7 @@ export class DraftManager {
     kb.text("Add Button", "draft:addbtn")
       .text("Manage Buttons", "draft:managebtns")
       .row();
-    kb.text("Preview", "draft:preview")
-      .text("Clear", "draft:clear")
-      .row();
+    kb.text("Preview", "draft:preview").text("Clear", "draft:clear").row();
 
     // Standard buttons for creating new posts
     kb.text("Send", "draft:send").text("Cancel", "draft:cancel").row();
@@ -34,7 +35,7 @@ export class DraftManager {
     const caption = d.text || "(empty)";
     const existingId =
       ctx.session.controlMessageId || ctx.session.draftPreviewMessageId;
-    
+
     const sendOrEdit = async () => {
       if (existingId) {
         try {
@@ -81,7 +82,7 @@ export class DraftManager {
       ctx.session.draftPreviewMessageId = sent.message_id;
       ctx.session.controlMessageId = sent.message_id;
     };
-    
+
     try {
       await sendOrEdit();
       logger.debug(
@@ -134,7 +135,8 @@ export class DraftManager {
       !ctx.session.draft ||
       !ctx.session.initialDraftMessageId ||
       ctx.session.draftLocked
-    ) return;
+    )
+      return;
 
     if (ctx.editedMessage?.message_id === ctx.session.initialDraftMessageId) {
       ctx.session.draft.text = formatToHtml(text);
@@ -145,7 +147,12 @@ export class DraftManager {
   /**
    * Processes media input (photos/videos)
    */
-  static async processMediaInput(ctx: BotContext, mediaType: 'photo' | 'video', fileId: string, caption?: string): Promise<void> {
+  static async processMediaInput(
+    ctx: BotContext,
+    mediaType: "photo" | "video",
+    fileId: string,
+    caption?: string,
+  ): Promise<void> {
     if (!ctx.session.draft || ctx.session.draftLocked) return;
 
     ctx.session.draft.postType = mediaType;

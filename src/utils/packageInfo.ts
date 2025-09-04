@@ -31,7 +31,8 @@ export function getPackageInfo(): PackageInfo {
     return {
       name: "Postify",
       version: "1.1.0",
-      description: "Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!"
+      description:
+        "Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!",
     };
   }
 }

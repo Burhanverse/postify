@@ -63,11 +63,14 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   let hasButtons = false;
 
   post.buttons?.forEach(
-    (b: {
-      text?: string | null;
-      url?: string | null;
-      callbackData?: string | null;
-    }, index: number) => {
+    (
+      b: {
+        text?: string | null;
+        url?: string | null;
+        callbackData?: string | null;
+      },
+      index: number,
+    ) => {
       if (b.url && b.text) {
         keyboard.url(b.text, b.url);
         hasButtons = true;
@@ -75,7 +78,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
         keyboard.text(b.text, `btn:${post._id.toString()}:${b.callbackData}`);
         hasButtons = true;
       }
-      
+
       // Add row break after every 2 buttons
       if ((index + 1) % 2 === 0) {
         keyboard.row();
@@ -141,7 +144,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     try {
       const personalBot = await getOrCreateUserBot(channel.botId);
       await personalBot.api.pinChatMessage(chatId, sent.message_id);
-      
+
       await PostModel.updateOne(
         { _id: post._id },
         {
@@ -150,7 +153,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
           },
         },
       );
-      
+
       logger.info(
         { postId: post._id.toString(), messageId: sent.message_id },
         "Post pinned successfully",

@@ -97,7 +97,10 @@ export function clearDraftSession(ctx: BotContext) {
 // Enhanced helper function to clear all draft-related session data
 export function clearAllDraftData(ctx: BotContext, clearLocked = true) {
   if (!ctx.session) {
-    logger.debug({ userId: ctx.from?.id }, "No session to clear draft data from");
+    logger.debug(
+      { userId: ctx.from?.id },
+      "No session to clear draft data from",
+    );
     return;
   }
 
@@ -108,7 +111,7 @@ export function clearAllDraftData(ctx: BotContext, clearLocked = true) {
   delete ctx.session.draftSourceMessages;
   delete ctx.session.initialDraftMessageId;
   delete ctx.session.draftEditMode;
-  
+
   if (clearLocked) {
     delete ctx.session.draftLocked;
   }

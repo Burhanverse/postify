@@ -17,15 +17,25 @@ export class PostPublisher {
   /**
    * Validates that the post can be sent
    */
-  static async validatePostSending(ctx: BotContext): Promise<{ success: boolean; channel?: ChannelDoc; error?: string }> {
+  static async validatePostSending(
+    ctx: BotContext,
+  ): Promise<{ success: boolean; channel?: ChannelDoc; error?: string }> {
     const draft = ctx.session.draft;
     if (!draft || (!draft.text?.trim() && !draft.mediaFileId)) {
-      return { success: false, error: "**Draft is empty!**\n\nAdd text or media content first before sending." };
+      return {
+        success: false,
+        error:
+          "**Draft is empty!**\n\nAdd text or media content first before sending.",
+      };
     }
 
     // Check if channel is selected
     if (!ctx.session.selectedChannelChatId) {
-      return { success: false, error: "**No channel selected!**\n\nUse /newpost to select a channel first." };
+      return {
+        success: false,
+        error:
+          "**No channel selected!**\n\nUse /newpost to select a channel first.",
+      };
     }
 
     const channel = await ChannelModel.findOne({
@@ -34,12 +44,20 @@ export class PostPublisher {
     });
 
     if (!channel) {
-      return { success: false, error: "**Channel not found!**\n\nPlease use /newpost to select a valid channel." };
+      return {
+        success: false,
+        error:
+          "**Channel not found!**\n\nPlease use /newpost to select a valid channel.",
+      };
     }
 
     // Ensure channel is bound to a personal bot
     if (!channel.botId) {
-      return { success: false, error: "**Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat." };
+      return {
+        success: false,
+        error:
+          "**Channel missing personal bot link**\n\nRelink this channel via your *personal bot* using /addchannel inside that bot chat.",
+      };
     }
 
     // Quick active personal bot record check before creating DB post
@@ -49,7 +67,11 @@ export class PostPublisher {
       status: "active",
     });
     if (!userBotRecord) {
-      return { success: false, error: "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status)." };
+      return {
+        success: false,
+        error:
+          "**Personal bot inactive**\n\nStart or re-add your personal bot first (use /mybot to verify status).",
+      };
     }
 
     return { success: true, channel };
@@ -58,7 +80,10 @@ export class PostPublisher {
   /**
    * Publishes a post immediately
    */
-  static async publishImmediate(ctx: BotContext, pinAfterPosting: boolean = false): Promise<void> {
+  static async publishImmediate(
+    ctx: BotContext,
+    pinAfterPosting: boolean = false,
+  ): Promise<void> {
     const validation = await this.validatePostSending(ctx);
     if (!validation.success || !validation.channel) {
       await ctx.reply(validation.error!, { parse_mode: "Markdown" });
@@ -88,25 +113,29 @@ export class PostPublisher {
         pinAfterPosting,
       });
 
-      console.log(`Created post${pinAfterPosting ? ' with pin flag' : ''}:`, post._id.toString());
+      console.log(
+        `Created post${pinAfterPosting ? " with pin flag" : ""}:`,
+        post._id.toString(),
+      );
 
       // Publish immediately using the publisher service
       const { publishPost } = await import("./publisher");
       await publishPost(post as Post & { _id: Types.ObjectId });
 
-      console.log(`Published${pinAfterPosting ? ' and pinned' : ''} post successfully`);
+      console.log(
+        `Published${pinAfterPosting ? " and pinned" : ""} post successfully`,
+      );
 
       // Clear draft session
       clearAllDraftData(ctx);
 
-      const successMessage = pinAfterPosting 
+      const successMessage = pinAfterPosting
         ? `**Post sent & pinned successfully!**\n\nYour post has been published and pinned to: ${channel.title || channel.username || channel.chatId}`
         : `**Post sent successfully!**\n\nYour post has been published to: ${channel.title || channel.username || channel.chatId}`;
 
       await this.sendSuccessMessage(ctx, successMessage, draft);
-
     } catch (error) {
-      console.error(`Send now${pinAfterPosting ? ' & pin' : ''} error:`, error);
+      console.error(`Send now${pinAfterPosting ? " & pin" : ""} error:`, error);
       try {
         await ctx.answerCallbackQuery();
       } catch {}
@@ -120,7 +149,11 @@ export class PostPublisher {
   /**
    * Sends success message after publishing
    */
-  private static async sendSuccessMessage(ctx: BotContext, message: string, draft: DraftData): Promise<void> {
+  private static async sendSuccessMessage(
+    ctx: BotContext,
+    message: string,
+    draft: DraftData,
+  ): Promise<void> {
     try {
       if (
         draft.mediaFileId &&
@@ -142,7 +175,12 @@ export class PostPublisher {
   /**
    * Handles publish errors with appropriate user messaging
    */
-  private static async handlePublishError(ctx: BotContext, error: unknown, draft: DraftData, pinning: boolean = false): Promise<void> {
+  private static async handlePublishError(
+    ctx: BotContext,
+    error: unknown,
+    draft: DraftData,
+    pinning: boolean = false,
+  ): Promise<void> {
     const sendErrorMessage = async (message: string) => {
       try {
         if (
@@ -161,29 +199,31 @@ export class PostPublisher {
     if (error instanceof Error) {
       if (error.message.includes("chat not found")) {
         await sendErrorMessage(
-          "**Error: Channel not found**\n\nPlease re-add the channel with /addchannel"
+          "**Error: Channel not found**\n\nPlease re-add the channel with /addchannel",
         );
       } else if (
         error.message.includes("not enough rights") ||
         error.message.includes("lacks posting rights")
       ) {
-        const rights = pinning ? "posting and pinning rights" : "posting rights";
+        const rights = pinning
+          ? "posting and pinning rights"
+          : "posting rights";
         await sendErrorMessage(
-          `**Error: Insufficient permissions**\n\nPersonal bot lacks permission to ${pinning ? "post or pin" : "post"}. Make sure your personal bot is still an admin with ${rights}.`
+          `**Error: Insufficient permissions**\n\nPersonal bot lacks permission to ${pinning ? "post or pin" : "post"}. Make sure your personal bot is still an admin with ${rights}.`,
         );
       } else if (
         error.message.includes("personal bot") ||
         error.message.includes("Personal bot inactive")
       ) {
         await sendErrorMessage(
-          "**Personal bot issue**\n\nVerify your personal bot is running (/mybot) and relink the channel via that bot /addchannel."
+          "**Personal bot issue**\n\nVerify your personal bot is running (/mybot) and relink the channel via that bot /addchannel.",
         );
       } else {
         await sendErrorMessage(`**Error occurred**\n\n${error.message}`);
       }
     } else {
       await sendErrorMessage(
-        "**Unknown error occurred**\n\nPlease try again or contact support."
+        "**Unknown error occurred**\n\nPlease try again or contact support.",
       );
     }
   }

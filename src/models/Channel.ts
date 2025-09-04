@@ -1,4 +1,10 @@
-import { Schema, model, InferSchemaType, HydratedDocument, Types } from "mongoose";
+import {
+  Schema,
+  model,
+  InferSchemaType,
+  HydratedDocument,
+  Types,
+} from "mongoose";
 
 const ChannelSchema = new Schema(
   {

@@ -15,19 +15,22 @@ async function gracefulShutdown(signal: string) {
     logger.warn("Shutdown already in progress, ignoring signal");
     return;
   }
-  
+
   isShuttingDown = true;
-  logger.info({ signal }, "Received shutdown signal, starting graceful shutdown");
+  logger.info(
+    { signal },
+    "Received shutdown signal, starting graceful shutdown",
+  );
 
   try {
     await stopAllUserBots();
-    
+
     // Stop the main bot
     await stopBot();
-    
+
     // Stop agenda scheduler
     await shutdownAgenda();
-    
+
     logger.info("Graceful shutdown completed");
     process.exit(0);
   } catch (error) {
@@ -38,24 +41,24 @@ async function gracefulShutdown(signal: string) {
 
 // Setup signal handlers for graceful shutdown
 function setupSignalHandlers() {
-  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-  
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+
   // Handle unexpected exits
-  process.on('uncaughtException', (error) => {
-    logger.fatal({ error }, 'Uncaught exception');
-    gracefulShutdown('uncaughtException');
+  process.on("uncaughtException", (error) => {
+    logger.fatal({ error }, "Uncaught exception");
+    gracefulShutdown("uncaughtException");
   });
-  
-  process.on('unhandledRejection', (reason, promise) => {
-    logger.fatal({ reason, promise }, 'Unhandled rejection');
-    gracefulShutdown('unhandledRejection');
+
+  process.on("unhandledRejection", (reason, promise) => {
+    logger.fatal({ reason, promise }, "Unhandled rejection");
+    gracefulShutdown("unhandledRejection");
   });
 }
 
 async function main() {
   setupSignalHandlers();
-  
+
   await connectDb();
   await initAgenda();
   if (/ABCDEF|YOUR_TOKEN|123456:ABC/i.test(env.BOT_TOKEN)) {
@@ -65,12 +68,14 @@ async function main() {
   } else {
     launchBot();
     await loadAllUserBotsOnStartup();
-    
-    logger.info("Application started successfully. Press Ctrl+C to stop gracefully.");
+
+    logger.info(
+      "Application started successfully. Press Ctrl+C to stop gracefully.",
+    );
   }
 }
 
 main().catch((err) => {
   logger.error({ err }, "Fatal error during startup");
-  gracefulShutdown('startup-error');
+  gracefulShutdown("startup-error");
 });

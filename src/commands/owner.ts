@@ -32,12 +32,12 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       // Reset all error bots back to active
       const result = await UserBotModel.updateMany(
         { status: "error" },
-        { 
-          $set: { 
+        {
+          $set: {
             status: "active",
-            lastError: null
-          }
-        }
+            lastError: null,
+          },
+        },
       );
 
       // Show current status after reset
@@ -60,20 +60,25 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         `Error: ${afterStats.error}`,
         `Disabled: ${afterStats.disabled}`,
         "",
-        `Reset ${result.modifiedCount} bots from error to active status`
+        `Reset ${result.modifiedCount} bots from error to active status`,
       ].join("\n");
 
       await ctx.reply(message, { parse_mode: "Markdown" });
 
-      logger.info({ 
-        modifiedCount: result.modifiedCount,
-        beforeStats,
-        afterStats,
-        userId: ctx.from?.id 
-      }, "Owner reset user bots");
-
+      logger.info(
+        {
+          modifiedCount: result.modifiedCount,
+          beforeStats,
+          afterStats,
+          userId: ctx.from?.id,
+        },
+        "Owner reset user bots",
+      );
     } catch (error) {
-      logger.error({ error, userId: ctx.from?.id }, "Error in reset_userbots command");
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in reset_userbots command",
+      );
       await ctx.reply("Error resetting user bots. Check logs for details.");
     }
   });
@@ -90,13 +95,13 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         active: await UserBotModel.countDocuments({ status: "active" }),
         error: await UserBotModel.countDocuments({ status: "error" }),
         disabled: await UserBotModel.countDocuments({ status: "disabled" }),
-        total: await UserBotModel.countDocuments({})
+        total: await UserBotModel.countDocuments({}),
       };
 
       // Get some example error bots
       const errorBots = await UserBotModel.find(
         { status: "error" },
-        { botId: 1, lastError: 1 }
+        { botId: 1, lastError: 1 },
       ).limit(3);
 
       const message = [
@@ -111,21 +116,27 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
 
       if (errorBots.length > 0) {
         message.push("**Recent Errors:**");
-        errorBots.forEach(bot => {
+        errorBots.forEach((bot) => {
           const error = bot.lastError || "Unknown error";
-          message.push(`Bot ${bot.botId}: ${error.substring(0, 50)}${error.length > 50 ? '...' : ''}`);
+          message.push(
+            `Bot ${bot.botId}: ${error.substring(0, 50)}${error.length > 50 ? "..." : ""}`,
+          );
         });
         message.push("");
       }
 
       if (stats.error > 0) {
-        message.push("Use /reset_userbots to reset error bots to active status");
+        message.push(
+          "Use /reset_userbots to reset error bots to active status",
+        );
       }
 
       await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
-
     } catch (error) {
-      logger.error({ error, userId: ctx.from?.id }, "Error in bot_status command");
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in bot_status command",
+      );
       await ctx.reply("Error getting bot status. Check logs for details.");
     }
   });

@@ -16,12 +16,16 @@ const BOT_INFO = {
   developer: "Burhanverse",
   owner: "Burhanverse",
   sourceCode: "https://github.com/Burhanverse/postify",
-  mainBotUsername: "PostifyxBot"
+  mainBotUsername: "PostifyxBot",
 };
 
 // Helper function to create the about/start message
-async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promise<{ text: string; keyboard: InlineKeyboard }> {
-  const text = `<b>${BOT_INFO.name}</b> is a ` +
+async function createAboutMessage(
+  ctx: BotContext,
+  isPersonalBot = false,
+): Promise<{ text: string; keyboard: InlineKeyboard }> {
+  const text =
+    `<b>${BOT_INFO.name}</b> is a ` +
     `<i>${BOT_INFO.description}</i>\n\n` +
     `<b>Version:</b><i> ${BOT_INFO.version}</i>\n` +
     `<b>Developer:</b><i> ${BOT_INFO.developer}</i>\n` +
@@ -33,21 +37,23 @@ async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promi
     `• Send & pin functionality\n` +
     `• Multiple channels per user\n` +
     `• Personal bot integration</blockquote>\n\n` +
-    `${isPersonalBot ? '<i>This is your Personal Bot instance</i>' : '<i>This is the Main Bot instance</i>'}`;
+    `${isPersonalBot ? "<i>This is your Personal Bot instance</i>" : "<i>This is the Main Bot instance</i>"}`;
 
   const keyboard = new InlineKeyboard();
-  
+
   // Features button
   keyboard.text("Help & Features", "about:features").row();
-  
+
   // Source code button
   keyboard.url("Source Code", BOT_INFO.sourceCode).row();
-  
+
   // Main bot button (only for personal bots)
   if (isPersonalBot) {
-    keyboard.url("Open Postify Bot", `https://t.me/${BOT_INFO.mainBotUsername}`).row();
+    keyboard
+      .url("Open Postify Bot", `https://t.me/${BOT_INFO.mainBotUsername}`)
+      .row();
   }
-  
+
   // Close button
   keyboard.text("Close", "about:close");
 
@@ -55,14 +61,19 @@ async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promi
 }
 
 // Helper function to create help message
-function createHelpMessage(isPersonalBot = false): { text: string; keyboard: InlineKeyboard } {
-  const mainBotCmds = `<i>Main Bot Commands:</i>\n` +
+function createHelpMessage(isPersonalBot = false): {
+  text: string;
+  keyboard: InlineKeyboard;
+} {
+  const mainBotCmds =
+    `<i>Main Bot Commands:</i>\n` +
     `<blockquote>• <code>/start</code> or <code>/about</code> - Show bot information\n` +
     `• <code>/addbot</code> - Register your personal bot\n` +
     `• <code>/mybot</code> - Show personal bot status\n` +
     `• <code>/unlinkbot</code> - Remove personal bot\n\n</blockquote>`;
 
-  const personalBotCmds = `<i>Personal Bot Commands:</i>\n` +
+  const personalBotCmds =
+    `<i>Personal Bot Commands:</i>\n` +
     `<blockquote>• <code>/addchannel</code> - Link channels to this bot\n` +
     `• <code>/channels</code> - List linked channels\n` +
     `• <code>/checkchannels</code> - Check channel status\n` +
@@ -71,14 +82,18 @@ function createHelpMessage(isPersonalBot = false): { text: string; keyboard: Inl
     `• <code>/queue</code> - View scheduled posts\n` +
     `• <code>/timezone</code> - Set your timezone\n\n</blockquote>`;
 
-  const workflowText = `<i>Getting Started Workflow:</i>\n` +
+  const workflowText =
+    `<i>Getting Started Workflow:</i>\n` +
     `<blockquote>1. Use main bot to register your personal bot (/addbot)\n` +
     `2. Add your personal bot as admin to your channels\n` +
     `3. Use personal bot to link channels (/addchannel)\n` +
     `4. Create and schedule posts (/newpost)</blockquote>\n\n`;
 
-  const text = `<b>Help:</b>\n\n` +
-    (isPersonalBot ? personalBotCmds + mainBotCmds + workflowText : mainBotCmds + personalBotCmds + workflowText) +
+  const text =
+    `<b>Help:</b>\n\n` +
+    (isPersonalBot
+      ? personalBotCmds + mainBotCmds + workflowText
+      : mainBotCmds + personalBotCmds + workflowText) +
     `<i>Tips:</i>\n` +
     `<blockquote>• Personal bots handle channel operations\n` +
     `• Main bot manages bot registration\n` +
@@ -94,25 +109,26 @@ function createHelpMessage(isPersonalBot = false): { text: string; keyboard: Inl
 }
 
 // Helper function to create features message
-function createFeaturesMessage(isPersonalBot = false): { text: string; keyboard: InlineKeyboard } {
-  const text = `<b>Features:</b>\n\n` +
+function createFeaturesMessage(isPersonalBot = false): {
+  text: string;
+  keyboard: InlineKeyboard;
+} {
+  const text =
+    `<b>Features:</b>\n\n` +
     `<i>Channel Management:</i>\n` +
     `<blockquote>• Link unlimited channels (public & private)\n` +
     `• Check channel status and permissions\n` +
     `• Pin posts after sending\n` +
     `• Multi-channel post broadcasting\n\n</blockquote>` +
-    
     `<i>Content Creation:</i>\n` +
     `<blockquote>• Rich text formatting with HTML support\n` +
     `• Media attachments (photos, videos, documents)\n` +
     `• Interactive inline buttons\n\n</blockquote>` +
-    
     `<i>Native & Smart Scheduling:</i>\n` +
     `<blockquote>• Schedule posts for future delivery\n` +
     `• Custom timezone support\n` +
     `• Queue management and viewing\n` +
     `• Automatic post publishing\n\n</blockquote>` +
-    
     `<i>Personal Bot Integration:</i>\n` +
     `<blockquote>• Your own dedicated bot instance\n` +
     `• Complete channel control\n` +
@@ -134,11 +150,11 @@ export function addStartCommand(bot: Bot<BotContext>, isPersonalBot = false) {
   bot.command(["start", "about"], async (ctx) => {
     try {
       const { text, keyboard } = await createAboutMessage(ctx, isPersonalBot);
-      
+
       await ctx.reply(text, {
         parse_mode: "HTML",
         reply_markup: keyboard,
-        link_preview_options: { is_disabled: true }
+        link_preview_options: { is_disabled: true },
       });
     } catch (error) {
       logger.error({ error }, "Error in start/about command");
@@ -149,45 +165,48 @@ export function addStartCommand(bot: Bot<BotContext>, isPersonalBot = false) {
   // Handle callback queries for about interactions
   bot.callbackQuery(/^about:(.+)$/, async (ctx) => {
     const action = ctx.match[1];
-    
+
     try {
       switch (action) {
         case "features":
-          const { text: featuresText, keyboard: featuresKeyboard } = createFeaturesMessage(isPersonalBot);
+          const { text: featuresText, keyboard: featuresKeyboard } =
+            createFeaturesMessage(isPersonalBot);
           await ctx.editMessageText(featuresText, {
             parse_mode: "HTML",
             reply_markup: featuresKeyboard,
-            link_preview_options: { is_disabled: true }
+            link_preview_options: { is_disabled: true },
           });
           break;
-          
+
         case "help":
-          const { text: helpText, keyboard: helpKeyboard } = createHelpMessage(isPersonalBot);
+          const { text: helpText, keyboard: helpKeyboard } =
+            createHelpMessage(isPersonalBot);
           await ctx.editMessageText(helpText, {
             parse_mode: "HTML",
             reply_markup: helpKeyboard,
-            link_preview_options: { is_disabled: true }
+            link_preview_options: { is_disabled: true },
           });
           break;
-          
+
         case "back":
-          const { text: aboutText, keyboard: aboutKeyboard } = await createAboutMessage(ctx, isPersonalBot);
+          const { text: aboutText, keyboard: aboutKeyboard } =
+            await createAboutMessage(ctx, isPersonalBot);
           await ctx.editMessageText(aboutText, {
             parse_mode: "HTML",
             reply_markup: aboutKeyboard,
-            link_preview_options: { is_disabled: true }
+            link_preview_options: { is_disabled: true },
           });
           break;
-          
+
         case "close":
           await ctx.deleteMessage();
           break;
-          
+
         default:
           await ctx.answerCallbackQuery("Unknown action");
           return;
       }
-      
+
       await ctx.answerCallbackQuery();
     } catch (error) {
       logger.error({ error }, "Error handling about callback");
@@ -219,28 +238,30 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       await ctx.reply("No personal bot configured. Use /addbot to add one.");
       return;
     }
-      let msg = `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`;
-      if (ub.lastError) {
-        msg += `\nLast error: ${ub.lastError}`;
-      }
-      await ctx.reply(msg);
+    let msg = `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`;
+    if (ub.lastError) {
+      msg += `\nLast error: ${ub.lastError}`;
+    }
+    await ctx.reply(msg);
   });
 
   // Unlink flow with confirmation
-    bot.command("unlinkbot", async (ctx) => {
-      const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
-      if (!ub) return ctx.reply("No personal bot to unlink.");
-      ctx.session.awaitingUnlinkBotConfirm = true;
-      await ctx.reply(
-        "**Are you sure you want to unlink your personal bot?**\n\nType `CONFIRM UNLINK` to remove your personal bot (cannot be undone).",
-        {
-          parse_mode: "Markdown",
-          reply_markup: {
-            inline_keyboard: [[{ text: "Cancel", callback_data: "cancel_unlinkbot" }]],
-          },
+  bot.command("unlinkbot", async (ctx) => {
+    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+    if (!ub) return ctx.reply("No personal bot to unlink.");
+    ctx.session.awaitingUnlinkBotConfirm = true;
+    await ctx.reply(
+      "**Are you sure you want to unlink your personal bot?**\n\nType `CONFIRM UNLINK` to remove your personal bot (cannot be undone).",
+      {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "Cancel", callback_data: "cancel_unlinkbot" }],
+          ],
         },
-      );
-    });
+      },
+    );
+  });
 
   bot.on("message", async (ctx, next) => {
     // Unlink confirmation
@@ -248,15 +269,13 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       const val = ctx.message.text.trim();
       ctx.session.awaitingUnlinkBotConfirm = false;
       if (val !== "CONFIRM UNLINK") {
-    await ctx.reply("Canceled.");
-    return;
+        await ctx.reply("Canceled.");
+        return;
       }
       const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
       if (!ub) return ctx.reply("Already removed.");
       await UserBotModel.deleteOne({ botId: ub.botId });
-      await ctx.reply(
-        "Unlinked successfully. You can /addbot again anytime.",
-      );
+      await ctx.reply("Unlinked successfully. You can /addbot again anytime.");
       return;
     }
 
@@ -321,7 +340,10 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       await ctx.answerCallbackQuery({ text: "Unlink canceled." });
       if (ctx.callbackQuery.message) {
         try {
-          await ctx.api.deleteMessage(ctx.callbackQuery.message.chat.id, ctx.callbackQuery.message.message_id);
+          await ctx.api.deleteMessage(
+            ctx.callbackQuery.message.chat.id,
+            ctx.callbackQuery.message.message_id,
+          );
         } catch (err) {
           logger.warn({ err }, "Failed to delete unlink confirmation message");
         }

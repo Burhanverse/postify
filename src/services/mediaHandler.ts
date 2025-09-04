@@ -6,28 +6,34 @@ export class MediaHandler {
   /**
    * Processes photo messages for drafts
    */
-  static async handlePhotoMessage(ctx: BotContext, message: Message): Promise<boolean> {
+  static async handlePhotoMessage(
+    ctx: BotContext,
+    message: Message,
+  ): Promise<boolean> {
     if (!ctx.session.draft || ctx.session.draftLocked) return false;
 
     const photo = this.extractPhoto(message);
     if (!photo) return false;
 
     const caption = this.extractCaption(message);
-    await DraftManager.processMediaInput(ctx, 'photo', photo.file_id, caption);
+    await DraftManager.processMediaInput(ctx, "photo", photo.file_id, caption);
     return true;
   }
 
   /**
    * Processes video messages for drafts
    */
-  static async handleVideoMessage(ctx: BotContext, message: Message): Promise<boolean> {
+  static async handleVideoMessage(
+    ctx: BotContext,
+    message: Message,
+  ): Promise<boolean> {
     if (!ctx.session.draft || ctx.session.draftLocked) return false;
 
     const video = this.extractVideo(message);
     if (!video) return false;
 
     const caption = this.extractCaption(message);
-    await DraftManager.processMediaInput(ctx, 'video', video.file_id, caption);
+    await DraftManager.processMediaInput(ctx, "video", video.file_id, caption);
     return true;
   }
 
@@ -57,7 +63,9 @@ export class MediaHandler {
   /**
    * Type guard for photo messages
    */
-  private static hasPhotos(message: Message): message is Message & { photo: PhotoSize[] } {
+  private static hasPhotos(
+    message: Message,
+  ): message is Message & { photo: PhotoSize[] } {
     if (!("photo" in message)) return false;
     const candidate = (message as { photo?: unknown }).photo;
     return Array.isArray(candidate);
@@ -66,7 +74,9 @@ export class MediaHandler {
   /**
    * Type guard for video messages
    */
-  private static hasVideo(message: Message): message is Message & { video: Video } {
+  private static hasVideo(
+    message: Message,
+  ): message is Message & { video: Video } {
     if (!("video" in message)) return false;
     const candidate = (message as { video?: unknown }).video;
     return typeof candidate === "object" && candidate !== null;

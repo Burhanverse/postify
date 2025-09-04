@@ -34,9 +34,9 @@ export async function messageCleanupMiddleware(
 
   // Override reply methods to track sent messages and disable link previews
   ctx.reply = async (text: string, other?: Record<string, unknown>) => {
-    const options = { 
-      ...other, 
-      disable_web_page_preview: true 
+    const options = {
+      ...other,
+      disable_web_page_preview: true,
     } as Parameters<typeof originalReply>[1];
     const sent = await originalReply(text, options);
     trackBotMessage(ctx, sent.message_id, getMessageType(text, other));
@@ -44,10 +44,13 @@ export async function messageCleanupMiddleware(
   };
 
   if (ctx.replyWithPhoto) {
-    ctx.replyWithPhoto = async (photo: string, other?: Record<string, unknown>) => {
-      const options = { 
-        ...other, 
-        disable_web_page_preview: true 
+    ctx.replyWithPhoto = async (
+      photo: string,
+      other?: Record<string, unknown>,
+    ) => {
+      const options = {
+        ...other,
+        disable_web_page_preview: true,
       } as Parameters<typeof originalReplyWithPhoto>[1];
       const sent = await originalReplyWithPhoto!(photo, options);
       trackBotMessage(ctx, sent.message_id, "draft_preview");
@@ -56,10 +59,13 @@ export async function messageCleanupMiddleware(
   }
 
   if (ctx.replyWithVideo) {
-    ctx.replyWithVideo = async (video: string, other?: Record<string, unknown>) => {
-      const options = { 
-        ...other, 
-        disable_web_page_preview: true 
+    ctx.replyWithVideo = async (
+      video: string,
+      other?: Record<string, unknown>,
+    ) => {
+      const options = {
+        ...other,
+        disable_web_page_preview: true,
       } as Parameters<typeof originalReplyWithVideo>[1];
       const sent = await originalReplyWithVideo!(video, options);
       trackBotMessage(ctx, sent.message_id, "draft_preview");
@@ -76,30 +82,43 @@ function isProtectedCallback(ctx: BotContext): boolean {
 
   // Protect scheduling-related callbacks
   if (data.startsWith("schedule_") || data.includes("queue")) return true;
-  
+
   // Protect draft preview callbacks (don't cleanup when user interacts with draft)
   if (data.startsWith("draft:") && !data.includes("preview")) return true;
 
   // Protect newpost channel selection callbacks
   if (data.startsWith("newpost:select:")) return true;
-  
+
   return false;
 }
 
-function getMessageType(text: string, other?: Record<string, unknown>): "schedule" | "post_sent" | "draft_preview" | "general" {
+function getMessageType(
+  text: string,
+  other?: Record<string, unknown>,
+): "schedule" | "post_sent" | "draft_preview" | "general" {
   if (text.includes("scheduled successfully") || text.includes("Schedule")) {
     return "schedule";
   }
-  if (text.includes("Post sent successfully") || text.includes("published to")) {
+  if (
+    text.includes("Post sent successfully") ||
+    text.includes("published to")
+  ) {
     return "post_sent";
   }
-  if (other?.reply_markup && (text.includes("(empty)") || text.includes("Text") || text.includes("Send"))) {
+  if (
+    other?.reply_markup &&
+    (text.includes("(empty)") || text.includes("Text") || text.includes("Send"))
+  ) {
     return "draft_preview";
   }
   return "general";
 }
 
-function trackBotMessage(ctx: BotContext, messageId: number, type: "schedule" | "post_sent" | "draft_preview" | "general") {
+function trackBotMessage(
+  ctx: BotContext,
+  messageId: number,
+  type: "schedule" | "post_sent" | "draft_preview" | "general",
+) {
   if (!ctx.session.recentBotMessages) ctx.session.recentBotMessages = [];
   if (!ctx.session.protectedMessages) ctx.session.protectedMessages = {};
 
@@ -115,7 +134,7 @@ function trackBotMessage(ctx: BotContext, messageId: number, type: "schedule" | 
         ctx.session.protectedMessages.scheduleMessages.shift();
       }
       break;
-    
+
     case "post_sent":
       if (!ctx.session.protectedMessages.postSentNotices) {
         ctx.session.protectedMessages.postSentNotices = [];
@@ -126,12 +145,12 @@ function trackBotMessage(ctx: BotContext, messageId: number, type: "schedule" | 
         ctx.session.protectedMessages.postSentNotices.shift();
       }
       break;
-    
+
     case "draft_preview":
       // Update current draft preview (only keep one active)
       ctx.session.protectedMessages.currentDraftPreview = messageId;
       break;
-    
+
     default:
       // Track general messages for cleanup
       ctx.session.recentBotMessages.push(messageId);
@@ -145,20 +164,20 @@ function trackBotMessage(ctx: BotContext, messageId: number, type: "schedule" | 
 async function cleanupOldMessages(ctx: BotContext) {
   const chatId = ctx.chat!.id;
   const messagesToClean = [...(ctx.session.recentBotMessages || [])];
-  
+
   // Get all protected message IDs
   const protectedIds = new Set([
     ...(ctx.session.protectedMessages?.scheduleMessages || []),
     ...(ctx.session.protectedMessages?.postSentNotices || []),
   ]);
-  
+
   if (ctx.session.protectedMessages?.currentDraftPreview) {
     protectedIds.add(ctx.session.protectedMessages.currentDraftPreview);
   }
 
   // Clean up messages that are not protected
-  const toDelete = messagesToClean.filter(id => !protectedIds.has(id));
-  
+  const toDelete = messagesToClean.filter((id) => !protectedIds.has(id));
+
   for (const messageId of toDelete) {
     try {
       await ctx.api.deleteMessage(chatId, messageId);
@@ -170,7 +189,9 @@ async function cleanupOldMessages(ctx: BotContext) {
 
   // Clear cleaned up messages from tracking
   if (ctx.session.recentBotMessages) {
-    ctx.session.recentBotMessages = ctx.session.recentBotMessages.filter(id => protectedIds.has(id));
+    ctx.session.recentBotMessages = ctx.session.recentBotMessages.filter((id) =>
+      protectedIds.has(id),
+    );
   }
 }
 
@@ -184,7 +205,10 @@ export async function cleanupOldDraftPreview(ctx: BotContext) {
     try {
       await ctx.api.deleteMessage(chatId, oldPreviewId);
     } catch (error) {
-      logger.debug({ error, messageId: oldPreviewId }, "Failed to delete old draft preview");
+      logger.debug(
+        { error, messageId: oldPreviewId },
+        "Failed to delete old draft preview",
+      );
     }
     // Clear the old preview reference
     if (ctx.session.protectedMessages) {

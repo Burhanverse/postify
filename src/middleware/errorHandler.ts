@@ -149,10 +149,7 @@ async function handleUnknownError(ctx: BotContext, error: unknown) {
     "Unknown error",
   );
 
-  await safeReply(
-    ctx,
-    "An unexpected error occurred. Please try again later.",
-  );
+  await safeReply(ctx, "An unexpected error occurred. Please try again later.");
 }
 
 async function safeReply(ctx: BotContext, text: string) {

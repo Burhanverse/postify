@@ -11,17 +11,20 @@ export class QueueManager {
   /**
    * Handles queue channel selection
    */
-  static async handleQueueChannelSelection(ctx: BotContext, chatId: string): Promise<void> {
+  static async handleQueueChannelSelection(
+    ctx: BotContext,
+    chatId: string,
+  ): Promise<void> {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply('Authentication required.');
+      await ctx.reply("Authentication required.");
       return;
     }
 
     const channels = await getUserChannels(userId);
     const selected = channels.find((c) => String(c.chatId) === chatId);
     if (!selected) {
-      await ctx.reply('Channel not found or not linked.');
+      await ctx.reply("Channel not found or not linked.");
       return;
     }
 
@@ -30,29 +33,30 @@ export class QueueManager {
       userId,
       channelId,
       limit: 15,
-      sortBy: 'scheduledAt',
-      sortOrder: 'asc',
+      sortBy: "scheduledAt",
+      sortOrder: "asc",
     });
 
     if (result.posts.length === 0) {
       await ctx.reply(
-        '**Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.',
-        { parse_mode: 'Markdown' },
+        "**Queue is empty**\n\nNo posts are currently scheduled for this channel.\n\nUse /newpost to create and schedule a new post.",
+        { parse_mode: "Markdown" },
       );
       return;
     }
 
-    const channelName = selected.title || selected.username || selected.chatId || 'Unknown';
+    const channelName =
+      selected.title || selected.username || selected.chatId || "Unknown";
     let response = `**Scheduled Posts for ${channelName}**\n`;
     response += `(${result.total} total scheduled)\n\n`;
 
     result.posts.forEach((post, index) => {
       const scheduledTime = DateTime.fromJSDate(post.scheduledAt!);
-      const timeDisplay = scheduledTime.toFormat('MMM dd, HH:mm');
+      const timeDisplay = scheduledTime.toFormat("MMM dd, HH:mm");
       const relativeTime = scheduledTime.toRelative();
       const preview = post.text
         ? post.text.length > 50
-          ? post.text.substring(0, 50) + '...'
+          ? post.text.substring(0, 50) + "..."
           : post.text
         : `${post.type} post`;
       response += `${index + 1}. **${preview}**\n`;
@@ -66,17 +70,18 @@ export class QueueManager {
 
     // Build keyboard: New Post first, then Send Now/Cancel for each post, then Close
     const keyboard = new InlineKeyboard();
-    keyboard.text('New Post', 'new_post_quick').row();
+    keyboard.text("New Post", "new_post_quick").row();
     result.posts.forEach((post) => {
-      keyboard.text('Send Now', `queue_sendnow:${post._id.toString()}`)
-        .text('Cancel', `queue_cancel:${post._id.toString()}`)
+      keyboard
+        .text("Send Now", `queue_sendnow:${post._id.toString()}`)
+        .text("Cancel", `queue_cancel:${post._id.toString()}`)
         .row();
     });
-    keyboard.text('Close', 'close_message');
+    keyboard.text("Close", "close_message");
 
     await ctx.reply(response, {
       reply_markup: keyboard,
-      parse_mode: 'Markdown',
+      parse_mode: "Markdown",
     });
   }
 
@@ -86,76 +91,82 @@ export class QueueManager {
   static async handleSendNow(ctx: BotContext, postId: string): Promise<void> {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply('Authentication required.');
+      await ctx.reply("Authentication required.");
       return;
     }
 
     // Find the post and check ownership
     const post = await PostModel.findById(postId);
     if (!post) {
-      await ctx.reply('Scheduled post not found.');
+      await ctx.reply("Scheduled post not found.");
       return;
     }
 
     // Check if user owns the channel
     const channel = await ChannelModel.findById(post.channel);
     if (!channel || !channel.owners.includes(userId)) {
-      await ctx.reply('You do not have permission to send this post.');
+      await ctx.reply("You do not have permission to send this post.");
       return;
     }
 
     // Only allow if post is scheduled
-    if (post.status !== 'scheduled') {
-      await ctx.reply('Post is not scheduled or already sent.');
+    if (post.status !== "scheduled") {
+      await ctx.reply("Post is not scheduled or already sent.");
       return;
     }
 
     // Publish immediately
     try {
-      const { publishPost } = await import('./publisher');
+      const { publishPost } = await import("./publisher");
       await publishPost(post);
-      post.status = 'published';
+      post.status = "published";
       post.publishedAt = new Date();
       await post.save();
-      await ctx.reply('Posted successfully.');
+      await ctx.reply("Posted successfully.");
     } catch (err) {
-      await ctx.reply('Failed to send post: ' + (err instanceof Error ? err.message : String(err)));
+      await ctx.reply(
+        "Failed to send post: " +
+          (err instanceof Error ? err.message : String(err)),
+      );
     }
   }
 
   /**
    * Handles cancelling a scheduled post
    */
-  static async handleCancelScheduled(ctx: BotContext, postId: string): Promise<void> {
+  static async handleCancelScheduled(
+    ctx: BotContext,
+    postId: string,
+  ): Promise<void> {
     const userId = ctx.from?.id;
     if (!userId) {
-      await ctx.reply('Authentication required.');
+      await ctx.reply("Authentication required.");
       return;
     }
 
     // Find the post and check ownership
     const post = await PostModel.findById(postId);
     if (!post) {
-      await ctx.reply('Scheduled post not found.');
+      await ctx.reply("Scheduled post not found.");
       return;
     }
 
     // Check if user owns the channel
     const channel = await ChannelModel.findById(post.channel);
     if (!channel || !channel.owners.includes(userId)) {
-      await ctx.reply('You do not have permission to cancel this post.');
+      await ctx.reply("You do not have permission to cancel this post.");
       return;
     }
 
     // Only allow if post is scheduled
-    if (post.status !== 'scheduled') {
-      await ctx.reply('Post is not scheduled or already sent.');
+    if (post.status !== "scheduled") {
+      await ctx.reply("Post is not scheduled or already sent.");
       return;
     }
 
     // Remove the post
     await PostModel.deleteOne({ _id: postId });
-    await ctx.reply('Cancelled scheduled post.');
+    await ctx.reply("Cancelled scheduled post.");
   }
 
   /**
@@ -195,10 +206,10 @@ export class QueueManager {
           keyboard.text(displayName, `queue:select:${channel.chatId}`).row();
         });
         keyboard.text("Cancel", "queue:cancel");
-        await ctx.reply(
-          "**Select a channel to view its queue:**",
-          { reply_markup: keyboard, parse_mode: "Markdown" },
-        );
+        await ctx.reply("**Select a channel to view its queue:**", {
+          reply_markup: keyboard,
+          parse_mode: "Markdown",
+        });
         return;
       }
 
@@ -251,7 +262,8 @@ export class QueueManager {
       const keyboard = new InlineKeyboard();
       keyboard.text("New Post", "new_post_quick").row();
       result.posts.forEach((post) => {
-        keyboard.text("Send Now", `queue_sendnow:${post._id.toString()}`)
+        keyboard
+          .text("Send Now", `queue_sendnow:${post._id.toString()}`)
           .text("Cancel", `queue_cancel:${post._id.toString()}`)
           .row();
       });

@@ -16,19 +16,19 @@
 
 ## Features (Roadmap)
 
-| Area                                  | Status                  |
-| ------------------------------------- | ----------------------- |
-| Channel connection (public & private) | Implemented             |
-| Permission checks (admin rights)      | Basic (post rights)     |
-| Multiple channels per user            | Implemented             |
-| Draft creation (text, media, buttons) | Implemented             |
-| Inline buttons (no counters)          | Implemented             |
-| Scheduling (presets + custom)         | Implemented             |
-| Timezone preferences                  | Implemented             |
-| Queues (scheduled list)               | Testing                 |
-| Send/Schedule & Pin the post          | Implemented             |
-| Group Topic Support                   | Planned                 |
-| Link personal bot                     | Implemented             |
+| Area                                  | Status              |
+| ------------------------------------- | ------------------- |
+| Channel connection (public & private) | Implemented         |
+| Permission checks (admin rights)      | Basic (post rights) |
+| Multiple channels per user            | Implemented         |
+| Draft creation (text, media, buttons) | Implemented         |
+| Inline buttons (no counters)          | Implemented         |
+| Scheduling (presets + custom)         | Implemented         |
+| Timezone preferences                  | Implemented         |
+| Queues (scheduled list)               | Testing             |
+| Send/Schedule & Pin the post          | Implemented         |
+| Group Topic Support                   | Planned             |
+| Link personal bot                     | Implemented         |
 
 ## Roadmap (Upcoming Ideas)
 
@@ -92,9 +92,10 @@ function hello() {
 ## Credits
 
 AI assistants that helped in the development of this project:
+
 - Claude 4
 - ChatGPT 5
 - Gemini 2.5 Pro
 - Grok Code
 
-*Made with ❤️ by Burhanverse*
+_Made with ❤️ by Burhanverse_

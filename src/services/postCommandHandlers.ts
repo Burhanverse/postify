@@ -10,7 +10,10 @@ export class PostCommandHandlers {
   /**
    * Handles /usechannel command
    */
-  static async handleUseChannel(ctx: BotContext, chatIdText: string): Promise<void> {
+  static async handleUseChannel(
+    ctx: BotContext,
+    chatIdText: string,
+  ): Promise<void> {
     if (!chatIdText.trim()) {
       await ctx.reply("Usage: /usechannel <chatId>");
       return;

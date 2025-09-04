@@ -167,7 +167,7 @@ export async function handleScheduleCommand(
     clearAllDraftData(ctx);
 
     // Success message
-    let successMessage = post.pinAfterPosting 
+    let successMessage = post.pinAfterPosting
       ? `**Post scheduled successfully with pinning!**\n\n`
       : `**Post scheduled successfully!**\n\n`;
     successMessage += `**When:** ${scheduledAt.toFormat("MMMM dd, yyyy 'at' HH:mm")} ${timezone}\n`;
@@ -286,20 +286,31 @@ function timezoneKeyboard(page = 0): InlineKeyboard {
 
   // Ensure deterministic unique entries, then sort by display label (after last '/')
   const unique = Array.from(new Set(allTzs));
-  const labeled = unique.map((tz) => ({ tz, label: tz.includes("/") ? tz.split("/").pop()! : tz }));
+  const labeled = unique.map((tz) => ({
+    tz,
+    label: tz.includes("/") ? tz.split("/").pop()! : tz,
+  }));
   labeled.sort((a, b) => a.label.localeCompare(b.label));
 
   const perPage = 12;
   const start = page * perPage;
   const slice = labeled.slice(start, start + perPage);
   const kb = new InlineKeyboard();
-  slice.forEach((entry) => kb.text(entry.label, `schedule_tz_set:${entry.tz}`).row());
+  slice.forEach((entry) =>
+    kb.text(entry.label, `schedule_tz_set:${entry.tz}`).row(),
+  );
   const total = unique.length;
   if (total > perPage) {
     const maxPage = Math.floor((total - 1) / perPage);
-    kb.text(page > 0 ? "Prev" : "·", `schedule_tz_page:${Math.max(page - 1, 0)}`)
+    kb.text(
+      page > 0 ? "Prev" : "·",
+      `schedule_tz_page:${Math.max(page - 1, 0)}`,
+    )
       .text("Cancel", "schedule_cancel")
-      .text(page < maxPage ? "Next" : "·", `schedule_tz_page:${Math.min(page + 1, maxPage)}`)
+      .text(
+        page < maxPage ? "Next" : "·",
+        `schedule_tz_page:${Math.min(page + 1, maxPage)}`,
+      )
       .row();
   } else {
     kb.text("Cancel", "schedule_cancel").row();
@@ -544,10 +555,9 @@ async function handleCancelPost(
         { parse_mode: "Markdown" },
       );
     } else {
-      await ctx.editMessageText(
-        `**Cancellation failed**\n\n${result.error}`,
-        { parse_mode: "Markdown" },
-      );
+      await ctx.editMessageText(`**Cancellation failed**\n\n${result.error}`, {
+        parse_mode: "Markdown",
+      });
     }
   } catch (error) {
     logger.error({ error, userId, postId }, "Error cancelling post");
