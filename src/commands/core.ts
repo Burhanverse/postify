@@ -71,7 +71,7 @@ function createHelpMessage(isPersonalBot = false): { text: string; keyboard: Inl
     `• <code>/queue</code> - View scheduled posts\n` +
     `• <code>/timezone</code> - Set your timezone\n\n</blockquote>`;
 
-  const workflowText = `<b>Getting Started Workflow:</b>\n` +
+  const workflowText = `<i>Getting Started Workflow:</i>\n` +
     `<blockquote>1. Use main bot to register your personal bot (/addbot)\n` +
     `2. Add your personal bot as admin to your channels\n` +
     `3. Use personal bot to link channels (/addchannel)\n` +
