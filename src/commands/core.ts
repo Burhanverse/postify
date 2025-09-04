@@ -70,6 +70,7 @@ function createHelpMessage(isPersonalBot = false): {
     `<blockquote>• <code>/start</code> or <code>/about</code> - Show bot information\n` +
     `• <code>/addbot</code> - Register your personal bot\n` +
     `• <code>/mybot</code> - Show personal bot status\n` +
+    `• <code>/restartbot</code> - Restart personal bot\n` +
     `• <code>/unlinkbot</code> - Remove personal bot\n\n</blockquote>`;
 
   const personalBotCmds =
@@ -242,7 +243,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
     // Check if bot is currently active in registry
     const activeBots = listActiveUserBots();
     const isActiveInRegistry = activeBots.includes(ub.botId);
-    const registryStatus = isActiveInRegistry ? "✅ Running" : "❌ Not Running";
+    const registryStatus = isActiveInRegistry ? "Running" : "Not Running";
 
     let msg = [
       "**Personal Bot Status**",
@@ -277,7 +278,20 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       }
     }
 
-    await ctx.reply(msg.join("\n"), { parse_mode: "Markdown" });
+    // Create keyboard with restart button if bot is not running
+    let keyboard = undefined;
+    if (ub.status === "active" && !isActiveInRegistry) {
+      keyboard = {
+        inline_keyboard: [
+          [{ text: "Restart Bot", callback_data: `restart_bot:${ub.botId}` }],
+        ],
+      };
+    }
+
+    await ctx.reply(msg.join("\n"), { 
+      parse_mode: "Markdown",
+      reply_markup: keyboard 
+    });
   });
 
   // Unlink flow with confirmation
@@ -296,6 +310,61 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
         },
       },
     );
+  });
+
+  // Restart personal bot command
+  bot.command("restartbot", async (ctx) => {
+    const ub = await UserBotModel.findOne({ ownerTgId: ctx.from?.id });
+    if (!ub) {
+      await ctx.reply("No personal bot configured. Use /addbot to add one.");
+      return;
+    }
+
+    if (ub.status !== "active") {
+      await ctx.reply(
+        `Bot is in '${ub.status}' status. Please contact support if you need to restart an error/disabled bot.`
+      );
+      return;
+    }
+
+    try {
+      await ctx.reply("Attempting to restart your personal bot...");
+      
+      // Try to restart the bot
+      await getOrCreateUserBot(ub.botId);
+      
+      // Check if it's now running
+      const activeBots = listActiveUserBots();
+      const isNowRunning = activeBots.includes(ub.botId);
+      
+      if (isNowRunning) {
+        await ctx.reply(
+          "**Bot restarted successfully!**\n\nYour personal bot is now running and ready to use.",
+          { parse_mode: "Markdown" }
+        );
+      } else {
+        await ctx.reply(
+          "**Restart initiated but bot may still be starting up.**\n\nTry using your bot in a few seconds. If issues persist, use /mybot to check status.",
+          { parse_mode: "Markdown" }
+        );
+      }
+      
+      logger.info(
+        { botId: ub.botId, username: ub.username, success: isNowRunning, userId: ctx.from?.id },
+        "User triggered bot restart via command"
+      );
+      
+    } catch (error) {
+      await ctx.reply(
+        "**Failed to restart bot.**\n\nPlease try again in a few minutes. If the problem persists, contact support.",
+        { parse_mode: "Markdown" }
+      );
+      
+      logger.error(
+        { error, botId: ub.botId, userId: ctx.from?.id },
+        "Error during user-triggered bot restart command"
+      );
+    }
   });
 
   bot.on("message", async (ctx, next) => {
@@ -370,6 +439,90 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
   });
 
   bot.on("callback_query:data", async (ctx) => {
+    // Handle restart bot callback
+    if (ctx.callbackQuery.data?.startsWith("restart_bot:")) {
+      const botId = parseInt(ctx.callbackQuery.data.split(":")[1]);
+      
+      // Verify this is the user's bot
+      const ub = await UserBotModel.findOne({ 
+        ownerTgId: ctx.from?.id, 
+        botId: botId 
+      });
+      
+      if (!ub) {
+        await ctx.answerCallbackQuery({ 
+          text: "Bot not found or not yours.", 
+          show_alert: true 
+        });
+        return;
+      }
+
+      try {
+        await ctx.answerCallbackQuery({ text: "Restarting bot..." });
+        
+        // Try to restart the bot
+        await getOrCreateUserBot(botId);
+        
+        // Update the message to show success
+        const activeBots = listActiveUserBots();
+        const isNowRunning = activeBots.includes(botId);
+        const newStatus = isNowRunning ? "Running" : "Still Not Running";
+        
+        if (ctx.callbackQuery.message) {
+          const updatedMsg = [
+            "**Personal Bot Status**",
+            "",
+            `**Username:** @${ub.username}`,
+            `**Bot ID:** ${ub.botId}`,
+            `**Database Status:** ${ub.status}`,
+            `**Registry Status:** ${newStatus}`,
+            `**Token:** ...${ub.tokenLastFour}`,
+            "",
+            isNowRunning 
+              ? "**Bot restarted successfully!**" 
+              : "**Restart failed. Bot will retry automatically when used.**"
+          ];
+
+          // Remove keyboard after successful restart
+          const keyboard = isNowRunning ? undefined : {
+            inline_keyboard: [
+              [{ text: "Try Restart Again", callback_data: `restart_bot:${botId}` }],
+            ],
+          };
+
+          try {
+            await ctx.editMessageText(updatedMsg.join("\n"), {
+              parse_mode: "Markdown",
+              reply_markup: keyboard
+            });
+          } catch (err) {
+            // If edit fails, send a new message
+            await ctx.reply(updatedMsg.join("\n"), {
+              parse_mode: "Markdown",
+              reply_markup: keyboard
+            });
+          }
+        }
+        
+        logger.info(
+          { botId, username: ub.username, success: isNowRunning, userId: ctx.from?.id },
+          "User triggered bot restart via button"
+        );
+        
+      } catch (error) {
+        await ctx.answerCallbackQuery({ 
+          text: "Failed to restart bot. Try again later.", 
+          show_alert: true 
+        });
+        
+        logger.error(
+          { error, botId, userId: ctx.from?.id },
+          "Error during user-triggered bot restart"
+        );
+      }
+      return;
+    }
+
     if (ctx.callbackQuery.data === "cancel_unlinkbot") {
       ctx.session.awaitingUnlinkBotConfirm = false;
       await ctx.answerCallbackQuery({ text: "Unlink canceled." });
@@ -392,6 +545,7 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       { command: "start", description: "Start..." },
       { command: "addbot", description: "Register personal bot" },
       { command: "mybot", description: "Show personal bot status" },
+      { command: "restartbot", description: "Restart personal bot" },
       { command: "unlinkbot", description: "Remove personal bot" },
       { command: "about", description: "About Postify Bot" },
     ])

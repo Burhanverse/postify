@@ -7,6 +7,7 @@ import {
   getBotStatus,
   cleanupStaleBots,
   clearFailedBots,
+  getOrCreateUserBot,
 } from "../services/userBotRegistry";
 
 // Middleware to check if user is the bot owner
@@ -34,6 +35,12 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         disabled: await UserBotModel.countDocuments({ status: "disabled" }),
       };
 
+      // Get the bots that were reset before actually resetting them
+      const botsToRestart = await UserBotModel.find(
+        { status: "error" },
+        { botId: 1 }
+      );
+
       // Reset all error bots back to active
       const result = await UserBotModel.updateMany(
         { status: "error" },
@@ -52,6 +59,32 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         disabled: await UserBotModel.countDocuments({ status: "disabled" }),
       };
 
+      let restartResults = { success: 0, failed: 0 };
+
+      // Attempt to restart the bots that were reset
+      if (botsToRestart.length > 0) {
+        await ctx.reply("Restarting reset bots...", { parse_mode: "Markdown" });
+        
+        for (const botRecord of botsToRestart) {
+          try {
+            await getOrCreateUserBot(botRecord.botId);
+            restartResults.success++;
+            logger.info(
+              { botId: botRecord.botId },
+              "Successfully restarted bot after reset"
+            );
+            // Add a small delay between restarts to avoid conflicts
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          } catch (error) {
+            restartResults.failed++;
+            logger.error(
+              { error, botId: botRecord.botId },
+              "Failed to restart bot after reset"
+            );
+          }
+        }
+      }
+
       const message = [
         "**User Bot Reset Complete**",
         "",
@@ -66,15 +99,27 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         `Disabled: ${afterStats.disabled}`,
         "",
         `Reset ${result.modifiedCount} bots from error to active status`,
-      ].join("\n");
+      ];
 
-      await ctx.reply(message, { parse_mode: "Markdown" });
+      // Add restart results if any bots were restarted
+      if (botsToRestart.length > 0) {
+        message.push("");
+        message.push("**Restart Results:**");
+        message.push(`Successfully restarted: ${restartResults.success}`);
+        message.push(`Failed to restart: ${restartResults.failed}`);
+        if (restartResults.failed > 0) {
+          message.push("*Failed bots will retry automatically when used*");
+        }
+      }
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
 
       logger.info(
         {
           modifiedCount: result.modifiedCount,
           beforeStats,
           afterStats,
+          restartResults,
           userId: ctx.from?.id,
         },
         "Owner reset user bots",
@@ -168,7 +213,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       if (status.details.length > 0) {
         message.push("**Active Bot Details:**");
         status.details.forEach((bot) => {
-          const statusIcon = bot.isRunning && bot.actuallyRunning ? "✅" : "❌";
+          const statusIcon = bot.isRunning && bot.actuallyRunning ? "[OK]" : "[ERR]";
           message.push(
             `${statusIcon} Bot ${bot.botId} (${bot.username || "unknown"})`,
           );
@@ -259,6 +304,92 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         "Error in clearfailed command",
       );
       await ctx.reply("Error clearing failed bots list. Check logs for details.");
+    }
+  });
+
+  // Restart all active bots that are not currently running
+  bot.command("restartbots", async (ctx) => {
+    if (!isOwner(ctx)) {
+      await ctx.reply("This command is only available to the bot owner.");
+      return;
+    }
+
+    try {
+      // Get all active bots from database
+      const activeBots = await UserBotModel.find({ status: "active" });
+      const registryStatus = getBotStatus();
+      const currentlyRunning = new Set(registryStatus.details.map(bot => bot.botId));
+      
+      // Find bots that should be running but aren't
+      const botsToRestart = activeBots.filter(bot => !currentlyRunning.has(bot.botId));
+      
+      if (botsToRestart.length === 0) {
+        await ctx.reply("All active bots are already running in the registry.");
+        return;
+      }
+
+      await ctx.reply(
+        `Found ${botsToRestart.length} active bots not running. Starting restart process...`,
+        { parse_mode: "Markdown" }
+      );
+
+      let restartResults = { success: 0, failed: 0 };
+
+      for (const botRecord of botsToRestart) {
+        try {
+          await getOrCreateUserBot(botRecord.botId);
+          restartResults.success++;
+          logger.info(
+            { botId: botRecord.botId, username: botRecord.username },
+            "Successfully restarted bot via restartbots command"
+          );
+          // Add delay between restarts to avoid conflicts
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error) {
+          restartResults.failed++;
+          logger.error(
+            { error, botId: botRecord.botId, username: botRecord.username },
+            "Failed to restart bot via restartbots command"
+          );
+        }
+      }
+
+      const finalStatus = getBotStatus();
+      
+      const message = [
+        "**Bot Restart Complete**",
+        "",
+        `**Attempted to restart:** ${botsToRestart.length} bots`,
+        `**Successfully restarted:** ${restartResults.success}`,
+        `**Failed to restart:** ${restartResults.failed}`,
+        "",
+        `**Currently running:** ${finalStatus.active} bots`,
+        `**Creating:** ${finalStatus.creating}`,
+        `**Failed:** ${finalStatus.failed}`,
+      ];
+
+      if (restartResults.failed > 0) {
+        message.push("");
+        message.push("*Failed bots will retry automatically when used*");
+      }
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
+      
+      logger.info(
+        { 
+          attempted: botsToRestart.length,
+          restartResults,
+          finalStatus,
+          userId: ctx.from?.id 
+        },
+        "Owner performed bot restart command",
+      );
+    } catch (error) {
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in restartbots command",
+      );
+      await ctx.reply("Error during bot restart. Check logs for details.");
     }
   });
 }
