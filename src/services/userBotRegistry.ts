@@ -76,7 +76,7 @@ export async function getOrCreateUserBot(botId: number) {
   if (failedBots.has(botId)) {
     logger.warn(
       { botId, failedBotsCount: failedBots.size },
-      "Bot is in failed list, skipping restart to avoid conflicts"
+      "Bot is in failed list, skipping restart to avoid conflicts",
     );
     throw new Error(
       `Bot ${botId} recently failed, skipping restart to avoid conflicts`,
@@ -190,7 +190,7 @@ export async function getOrCreateUserBot(botId: number) {
       const meta = activeBots.get(botId);
       if (meta) {
         meta.failures += 1;
-        
+
         // Check if this is a 409 conflict error
         const errorMessage = err instanceof Error ? err.message : String(err);
         if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
@@ -198,27 +198,30 @@ export async function getOrCreateUserBot(botId: number) {
             { err, botId, failures: meta.failures },
             "Telegram 409 conflict detected - multiple instances running",
           );
-          
+
           // Mark bot as not running and remove from active bots
           meta.isRunning = false;
           activeBots.delete(botId);
           failedBots.add(botId);
-          
+
           // Stop the bot instance
           try {
             meta.bot.stop();
           } catch (e) {
             // Ignore stop errors
           }
-          
+
           // Set a longer timeout for 409 errors (15 minutes)
-          setTimeout(() => {
-            failedBots.delete(botId);
-            logger.info(
-              { botId },
-              "Removed bot from failed list after 409 conflict, allowing retry",
-            );
-          }, 15 * 60 * 1000);
+          setTimeout(
+            () => {
+              failedBots.delete(botId);
+              logger.info(
+                { botId },
+                "Removed bot from failed list after 409 conflict, allowing retry",
+              );
+            },
+            15 * 60 * 1000,
+          );
         }
       }
       logger.error({ err, botId }, "Unhandled personal bot error");
@@ -308,34 +311,34 @@ export function stopUserBot(botId: number) {
 export async function stopAllUserBots() {
   logger.info({ count: activeBots.size }, "Stopping all personal bots");
 
-    const stopPromises = Array.from(activeBots.entries()).map(
-      async ([botId, meta]) => {
-        try {
-          // Mark as not running immediately to prevent race conditions
-          meta.isRunning = false;
-          
-          // Check if bot is already stopped or stopping
-          if (meta.bot.isRunning()) {
-            await meta.bot.stop();
-            logger.debug(
-              { botId, username: meta.username },
-              "Personal bot stopped",
-            );
-          } else {
-            logger.debug(
-              { botId, username: meta.username },
-              "Personal bot was already stopped",
-            );
-          }
-        } catch (e) {
-          // Log but don't fail the shutdown process for individual bot failures
-          logger.warn(
-            { e, botId, username: meta.username },
-            "Error stopping personal bot during shutdown",
+  const stopPromises = Array.from(activeBots.entries()).map(
+    async ([botId, meta]) => {
+      try {
+        // Mark as not running immediately to prevent race conditions
+        meta.isRunning = false;
+
+        // Check if bot is already stopped or stopping
+        if (meta.bot.isRunning()) {
+          await meta.bot.stop();
+          logger.debug(
+            { botId, username: meta.username },
+            "Personal bot stopped",
+          );
+        } else {
+          logger.debug(
+            { botId, username: meta.username },
+            "Personal bot was already stopped",
           );
         }
-      },
-    );  // Wait for all stop operations to complete (or timeout after 10 seconds)
+      } catch (e) {
+        // Log but don't fail the shutdown process for individual bot failures
+        logger.warn(
+          { e, botId, username: meta.username },
+          "Error stopping personal bot during shutdown",
+        );
+      }
+    },
+  ); // Wait for all stop operations to complete (or timeout after 10 seconds)
   await Promise.race([
     Promise.allSettled(stopPromises),
     new Promise((resolve) => setTimeout(resolve, 10000)),
@@ -372,7 +375,10 @@ export function cleanupStaleBots() {
   let cleanedCount = 0;
   for (const [botId, meta] of activeBots.entries()) {
     if (meta.isRunning && !meta.bot.isRunning()) {
-      logger.warn({ botId }, "Found stale bot instance, removing from registry");
+      logger.warn(
+        { botId },
+        "Found stale bot instance, removing from registry",
+      );
       activeBots.delete(botId);
       cleanedCount++;
     }
@@ -407,7 +413,7 @@ export async function loadAllUserBotsOnStartup() {
   try {
     // First, clean up any stale bot instances
     cleanupStaleBots();
-    
+
     const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
     logger.info({ count: records.length }, "Loading personal bots on startup");
 
@@ -471,7 +477,7 @@ export async function loadAllUserBotsOnStartup() {
 
     startupComplete = true;
     logger.info("Personal bot startup complete");
-    
+
     // Log final status
     const status = getBotStatus();
     logger.info(status, "Bot registry status after startup");

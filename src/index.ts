@@ -75,7 +75,7 @@ async function main() {
   } else {
     launchBot();
     await loadAllUserBotsOnStartup();
-    
+
     // Start health monitor after all bots are loaded
     startBotHealthMonitor();
 

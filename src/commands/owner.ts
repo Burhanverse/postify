@@ -39,7 +39,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       // Get the bots that were reset before actually resetting them
       const botsToRestart = await UserBotModel.find(
         { status: "error" },
-        { botId: 1 }
+        { botId: 1 },
       );
 
       // Reset all error bots back to active
@@ -65,36 +65,39 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       // Attempt to restart the bots that were reset
       if (botsToRestart.length > 0) {
         await ctx.reply("Restarting reset bots...", { parse_mode: "Markdown" });
-        
+
         for (const botRecord of botsToRestart) {
           try {
             // Clear this specific bot from failed list first to allow restart
             clearFailedBot(botRecord.botId);
-            
+
             logger.debug(
               { botId: botRecord.botId },
-              "Attempting to restart bot after reset"
+              "Attempting to restart bot after reset",
             );
             await getOrCreateUserBot(botRecord.botId);
             restartResults.success++;
             logger.info(
               { botId: botRecord.botId },
-              "Successfully restarted bot after reset"
+              "Successfully restarted bot after reset",
             );
             // Add a small delay between restarts to avoid conflicts
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           } catch (error) {
             restartResults.failed++;
             logger.error(
-              { 
-                error: error instanceof Error ? {
-                  message: error.message,
-                  stack: error.stack,
-                  name: error.name
-                } : error,
-                botId: botRecord.botId 
+              {
+                error:
+                  error instanceof Error
+                    ? {
+                        message: error.message,
+                        stack: error.stack,
+                        name: error.name,
+                      }
+                    : error,
+                botId: botRecord.botId,
               },
-              "Failed to restart bot after reset"
+              "Failed to restart bot after reset",
             );
           }
         }
@@ -215,7 +218,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
 
     try {
       const status = getBotStatus();
-      
+
       const message = [
         "**Bot Registry Status**",
         "",
@@ -234,7 +237,8 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       if (status.details.length > 0) {
         message.push("**Active Bot Details:**");
         status.details.forEach((bot) => {
-          const statusIcon = bot.isRunning && bot.actuallyRunning ? "[OK]" : "[ERR]";
+          const statusIcon =
+            bot.isRunning && bot.actuallyRunning ? "[OK]" : "[ERR]";
           message.push(
             `${statusIcon} Bot ${bot.botId} (${bot.username || "unknown"})`,
           );
@@ -253,7 +257,9 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         { error, userId: ctx.from?.id },
         "Error in botstatus command",
       );
-      await ctx.reply("Error getting detailed bot status. Check logs for details.");
+      await ctx.reply(
+        "Error getting detailed bot status. Check logs for details.",
+      );
     }
   });
 
@@ -267,7 +273,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
     try {
       const cleanedCount = cleanupStaleBots();
       const statusAfter = getBotStatus();
-      
+
       const message = [
         "**Bot Cleanup Complete**",
         "",
@@ -278,16 +284,13 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       ];
 
       await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
-      
+
       logger.info(
         { cleanedCount, statusAfter, userId: ctx.from?.id },
         "Owner performed bot cleanup",
       );
     } catch (error) {
-      logger.error(
-        { error, userId: ctx.from?.id },
-        "Error in cleanup command",
-      );
+      logger.error({ error, userId: ctx.from?.id }, "Error in cleanup command");
       await ctx.reply("Error during bot cleanup. Check logs for details.");
     }
   });
@@ -303,7 +306,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       const statusBefore = getBotStatus();
       clearFailedBots();
       const statusAfter = getBotStatus();
-      
+
       const message = [
         "**Failed Bots List Cleared**",
         "",
@@ -314,7 +317,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       ];
 
       await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
-      
+
       logger.info(
         { statusBefore: statusBefore.failed, userId: ctx.from?.id },
         "Owner cleared failed bots list",
@@ -324,7 +327,9 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         { error, userId: ctx.from?.id },
         "Error in clearfailed command",
       );
-      await ctx.reply("Error clearing failed bots list. Check logs for details.");
+      await ctx.reply(
+        "Error clearing failed bots list. Check logs for details.",
+      );
     }
   });
 
@@ -339,11 +344,15 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       // Get all active bots from database
       const activeBots = await UserBotModel.find({ status: "active" });
       const registryStatus = getBotStatus();
-      const currentlyRunning = new Set(registryStatus.details.map(bot => bot.botId));
-      
+      const currentlyRunning = new Set(
+        registryStatus.details.map((bot) => bot.botId),
+      );
+
       // Find bots that should be running but aren't
-      const botsToRestart = activeBots.filter(bot => !currentlyRunning.has(bot.botId));
-      
+      const botsToRestart = activeBots.filter(
+        (bot) => !currentlyRunning.has(bot.botId),
+      );
+
       if (botsToRestart.length === 0) {
         await ctx.reply("All active bots are already running in the registry.");
         return;
@@ -351,7 +360,7 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
 
       await ctx.reply(
         `Found ${botsToRestart.length} active bots not running. Starting restart process...`,
-        { parse_mode: "Markdown" }
+        { parse_mode: "Markdown" },
       );
 
       let restartResults = { success: 0, failed: 0 };
@@ -360,26 +369,26 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         try {
           // Clear this bot from failed list first to allow restart
           clearFailedBot(botRecord.botId);
-          
+
           await getOrCreateUserBot(botRecord.botId);
           restartResults.success++;
           logger.info(
             { botId: botRecord.botId, username: botRecord.username },
-            "Successfully restarted bot via restartbots command"
+            "Successfully restarted bot via restartbots command",
           );
           // Add delay between restarts to avoid conflicts
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         } catch (error) {
           restartResults.failed++;
           logger.error(
             { error, botId: botRecord.botId, username: botRecord.username },
-            "Failed to restart bot via restartbots command"
+            "Failed to restart bot via restartbots command",
           );
         }
       }
 
       const finalStatus = getBotStatus();
-      
+
       const message = [
         "**Bot Restart Complete**",
         "",
@@ -398,13 +407,13 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
       }
 
       await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
-      
+
       logger.info(
-        { 
+        {
           attempted: botsToRestart.length,
           restartResults,
           finalStatus,
-          userId: ctx.from?.id 
+          userId: ctx.from?.id,
         },
         "Owner performed bot restart command",
       );

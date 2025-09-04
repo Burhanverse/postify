@@ -1,10 +1,11 @@
 import { PostModel, Post } from "../models/Post";
 import { Types } from "mongoose";
 import { logger } from "../utils/logger";
-import { InlineKeyboard } from "grammy";
-import { ChannelModel } from "../models/Channel";
+import { InlineKeyboard, Bot } from "grammy";
+import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
 import { getOrCreateUserBot } from "./userBotRegistry";
+import { BotContext } from "../telegram/bot";
 
 export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   const channel = await ChannelModel.findById(post.channel);
@@ -34,43 +35,82 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     throw new Error("Personal bot inactive or missing.");
   }
 
-  try {
-    logger.debug(
-      { chatId, botId: userBotRecord.botId },
-      "Publisher: fetching personal bot & checking permissions",
-    );
-    const personalBot = await getOrCreateUserBot(userBotRecord.botId);
-    const botMember = await personalBot.api.getChatMember(
-      chatId,
-      userBotRecord.botId,
-    );
-    const canPost =
-      botMember.status === "administrator" || botMember.status === "creator";
-    if (!canPost) throw new Error("Personal bot lacks posting rights");
-    logger.debug(
-      { chatId, botId: userBotRecord.botId },
-      "Publisher: permission check passed",
-    );
-  } catch (err) {
-    // Check if this is a 409 conflict error
-    const errorMessage = err instanceof Error ? err.message : String(err);
-    if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
-      logger.error(
-        { err, chatId, botId: userBotRecord.botId },
-        "409 conflict detected in publisher - bot instance conflict",
-      );
-      throw new Error(
-        "Bot instance conflict detected. Please wait a few minutes and try again.",
-      );
-    }
-    
-    logger.warn(
-      { err, chatId, botId: userBotRecord.botId },
-      "Failed permission check for personal bot",
-    );
-    throw err instanceof Error ? err : new Error("Permission check failed");
-  }
+  // Retry logic for bot conflicts
+  let retryCount = 0;
+  const maxRetries = 2;
 
+  while (retryCount <= maxRetries) {
+    try {
+      logger.debug(
+        { chatId, botId: userBotRecord.botId, attempt: retryCount + 1 },
+        "Publisher: fetching personal bot & checking permissions",
+      );
+      const personalBot = await getOrCreateUserBot(userBotRecord.botId);
+      const botMember = await personalBot.api.getChatMember(
+        chatId,
+        userBotRecord.botId,
+      );
+      const canPost =
+        botMember.status === "administrator" || botMember.status === "creator";
+      if (!canPost) throw new Error("Personal bot lacks posting rights");
+      logger.debug(
+        { chatId, botId: userBotRecord.botId },
+        "Publisher: permission check passed",
+      );
+
+      // Return the bot instance for reuse
+      return await publishWithBot(post, channel, chatId, personalBot);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      // Check if this is a 409 conflict error
+      if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
+        retryCount++;
+        logger.warn(
+          {
+            err,
+            chatId,
+            botId: userBotRecord.botId,
+            attempt: retryCount,
+            maxRetries,
+          },
+          "409 conflict detected in publisher - retrying after delay",
+        );
+
+        if (retryCount > maxRetries) {
+          logger.error(
+            { err, chatId, botId: userBotRecord.botId, attempts: retryCount },
+            "Max retries exceeded for 409 conflict",
+          );
+          throw new Error(
+            "Bot instance conflict detected. Multiple retry attempts failed. Please try again later.",
+          );
+        }
+
+        // Wait before retry (exponential backoff)
+        const delayMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
+        logger.debug({ delayMs, attempt: retryCount }, "Waiting before retry");
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue; // Retry the loop
+      }
+
+      // For non-409 errors, don't retry
+      logger.warn(
+        { err, chatId, botId: userBotRecord.botId },
+        "Failed permission check for personal bot - not retrying",
+      );
+      throw err instanceof Error ? err : new Error("Permission check failed");
+    }
+  }
+}
+
+// Separate function to handle the actual publishing with the bot instance
+async function publishWithBot(
+  post: Post & { _id: Types.ObjectId },
+  channel: ChannelDoc,
+  chatId: number,
+  personalBot: Bot<BotContext>,
+) {
   const keyboard = new InlineKeyboard();
   let hasButtons = false;
 
@@ -110,7 +150,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
       { postId: post._id.toString(), chatId },
       "Publisher: sending message",
     );
-    const personalBot = await getOrCreateUserBot(channel.botId);
+    // Use the existing bot instance instead of calling getOrCreateUserBot again
     if (post.type === "photo" && post.mediaFileId) {
       sent = await personalBot.api.sendPhoto(chatId, post.mediaFileId, {
         caption: post.text || undefined,
@@ -154,7 +194,7 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
   // Pin the message if requested
   if (post.pinAfterPosting) {
     try {
-      const personalBot = await getOrCreateUserBot(channel.botId);
+      // Use the existing bot instance instead of calling getOrCreateUserBot again
       await personalBot.api.pinChatMessage(chatId, sent.message_id);
 
       await PostModel.updateOne(

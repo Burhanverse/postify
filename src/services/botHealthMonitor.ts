@@ -10,22 +10,25 @@ export function startBotHealthMonitor() {
   }
 
   // Run health check every 5 minutes
-  healthCheckInterval = setInterval(() => {
-    try {
-      const cleanedCount = cleanupStaleBots();
-      if (cleanedCount > 0) {
-        const status = getBotStatus();
-        logger.info(
-          { cleanedCount, status },
-          "Bot health check completed with cleanup",
-        );
-      } else {
-        logger.debug("Bot health check completed - all bots healthy");
+  healthCheckInterval = setInterval(
+    () => {
+      try {
+        const cleanedCount = cleanupStaleBots();
+        if (cleanedCount > 0) {
+          const status = getBotStatus();
+          logger.info(
+            { cleanedCount, status },
+            "Bot health check completed with cleanup",
+          );
+        } else {
+          logger.debug("Bot health check completed - all bots healthy");
+        }
+      } catch (error) {
+        logger.error({ error }, "Error during bot health check");
       }
-    } catch (error) {
-      logger.error({ error }, "Error during bot health check");
-    }
-  }, 5 * 60 * 1000); // 5 minutes
+    },
+    5 * 60 * 1000,
+  ); // 5 minutes
 
   logger.info("Bot health monitor started");
 }
