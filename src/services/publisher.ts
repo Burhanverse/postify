@@ -4,7 +4,7 @@ import { logger } from "../utils/logger";
 import { InlineKeyboard, Bot } from "grammy";
 import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
-import { getOrCreateUserBot, forceStopBot } from "./userBotRegistry";
+import { getActiveBotInstance } from "./userBotRegistry";
 import { BotContext } from "../telegram/bot";
 import { decrypt } from "../utils/crypto";
 
@@ -47,8 +47,12 @@ export async function publishPersonal(
       "Publisher: creating API-only bot & checking permissions",
     );
     
-  // Always use the polling bot instance for personal bots
-  const personalBot = await getOrCreateUserBot(userBotRecord.botId);
+    const personalBot = getActiveBotInstance(userBotRecord.botId);
+    if (!personalBot) {
+      throw new Error(
+        "Personal bot inactive. Start or re-add your personal bot first (use /mybot to verify status).",
+      );
+    }
     
     const botMember = await personalBot.api.getChatMember(
       chatId,

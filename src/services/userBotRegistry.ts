@@ -57,6 +57,14 @@ function initial(): SessionData {
   return {};
 }
 
+export function getActiveBotInstance(botId: number): Bot<BotContext> | undefined {
+  const meta = activeBots.get(botId);
+  if (meta && meta.isRunning && meta.bot.isRunning()) {
+    return meta.bot;
+  }
+  return undefined;
+}
+
 export async function getOrCreateUserBot(botId: number) {
   // Global lock to prevent any concurrent bot creation
   while (globalCreationLock) {
