@@ -200,6 +200,38 @@ export function stopUserBot(botId: number) {
   }
 }
 
+export async function stopAllUserBots() {
+  logger.info({ count: activeBots.size }, "Stopping all personal bots");
+  
+  const stopPromises = Array.from(activeBots.entries()).map(async ([botId, meta]) => {
+    try {
+      // Check if bot is already stopped or stopping
+      if (meta.bot.isRunning()) {
+        await meta.bot.stop();
+        logger.debug({ botId, username: meta.username }, "Personal bot stopped");
+      } else {
+        logger.debug({ botId, username: meta.username }, "Personal bot was already stopped");
+      }
+    } catch (e) {
+      // Log but don't fail the shutdown process for individual bot failures
+      logger.warn({ e, botId, username: meta.username }, "Error stopping personal bot during shutdown");
+    }
+  });
+
+  // Wait for all stop operations to complete (or timeout after 10 seconds)
+  await Promise.race([
+    Promise.allSettled(stopPromises),
+    new Promise(resolve => setTimeout(resolve, 10000))
+  ]);
+  
+  activeBots.clear();
+  
+  // Clear any in-flight bot creation processes
+  creatingBots.clear();
+  
+  logger.info("All personal bots shutdown process completed");
+}
+
 export function listActiveUserBots() {
   return [...activeBots.keys()];
 }
@@ -221,10 +253,12 @@ export async function loadAllUserBotsOnStartup() {
 
 // Simple supervisor loop: checks for bots marked active but not running, restarts; also demotes bots with many failures.
 let supervisorStarted = false;
+let supervisorInterval: NodeJS.Timeout | null = null;
+
 export function startUserBotSupervisor(intervalMs = 30000) {
   if (supervisorStarted) return;
   supervisorStarted = true;
-  setInterval(async () => {
+  supervisorInterval = setInterval(async () => {
     try {
       const activeRecords = await UserBotModel.find(
         { status: "active" },
@@ -269,5 +303,15 @@ export function startUserBotSupervisor(intervalMs = 30000) {
     } catch (err) {
       logger.error({ err }, "Supervisor iteration error");
     }
-  }, intervalMs).unref();
+  }, intervalMs);
+  supervisorInterval.unref();
+}
+
+export function stopUserBotSupervisor() {
+  if (supervisorInterval) {
+    clearInterval(supervisorInterval);
+    supervisorInterval = null;
+    supervisorStarted = false;
+    logger.info("User bot supervisor stopped");
+  }
 }

@@ -121,3 +121,12 @@ export function launchBot() {
   });
   logger.info("Bot started");
 }
+
+export async function stopBot() {
+  try {
+    await bot.stop();
+    logger.info("Main bot stopped");
+  } catch (error) {
+    logger.warn({ error }, "Error stopping main bot");
+  }
+}
