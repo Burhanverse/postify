@@ -37,8 +37,8 @@ async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promi
 
   const keyboard = new InlineKeyboard();
   
-  // Help button
-  keyboard.text("Help & Features", "about:help").row();
+  // Features button
+  keyboard.text("Help & Features", "about:features").row();
   
   // Source code button
   keyboard.url("Source Code", BOT_INFO.sourceCode).row();
@@ -56,17 +56,18 @@ async function createAboutMessage(ctx: BotContext, isPersonalBot = false): Promi
 
 // Helper function to create help message
 function createHelpMessage(isPersonalBot = false): { text: string; keyboard: InlineKeyboard } {
-  const mainBotFeatures = `<b>Main Bot Features:</b>\n` +
+  const mainBotCmds = `<i>Main Bot Commands:</i>\n` +
     `<blockquote>• <code>/start</code> or <code>/about</code> - Show bot information\n` +
     `• <code>/addbot</code> - Register your personal bot\n` +
     `• <code>/mybot</code> - Show personal bot status\n` +
     `• <code>/unlinkbot</code> - Remove personal bot\n\n</blockquote>`;
 
-  const personalBotFeatures = `<b>Personal Bot Features:</b>\n` +
+  const personalBotCmds = `<i>Personal Bot Commands:</i>\n` +
     `<blockquote>• <code>/addchannel</code> - Link channels to this bot\n` +
     `• <code>/channels</code> - List linked channels\n` +
     `• <code>/checkchannels</code> - Check channel status\n` +
     `• <code>/newpost</code> - Create and manage posts\n` +
+    `• <code>/preview</code> - Force regenerate preview of the post\n` +
     `• <code>/queue</code> - View scheduled posts\n` +
     `• <code>/timezone</code> - Set your timezone\n\n</blockquote>`;
 
@@ -76,15 +77,51 @@ function createHelpMessage(isPersonalBot = false): { text: string; keyboard: Inl
     `3. Use personal bot to link channels (/addchannel)\n` +
     `4. Create and schedule posts (/newpost)</blockquote>\n\n`;
 
-  const text = `<b>Help & Features</b>\n\n` +
-    (isPersonalBot ? personalBotFeatures + mainBotFeatures + workflowText : mainBotFeatures + personalBotFeatures + workflowText) +
-    `<b>Tips:</b>\n` +
+  const text = `<b>Help:</b>\n\n` +
+    (isPersonalBot ? personalBotCmds + mainBotCmds + workflowText : mainBotCmds + personalBotCmds + workflowText) +
+    `<i>Tips:</i>\n` +
     `<blockquote>• Personal bots handle channel operations\n` +
     `• Main bot manages bot registration\n` +
     `• Use HTML formatting in posts\n` +
     `• Schedule posts with custom timezone</blockquote>`;
 
   const keyboard = new InlineKeyboard()
+    .text("Back", "about:features")
+    .row()
+    .text("Close", "about:close");
+
+  return { text, keyboard };
+}
+
+// Helper function to create features message
+function createFeaturesMessage(isPersonalBot = false): { text: string; keyboard: InlineKeyboard } {
+  const text = `<b>Features:</b>\n\n` +
+    `<i>Channel Management:</i>\n` +
+    `<blockquote>• Link unlimited channels (public & private)\n` +
+    `• Check channel status and permissions\n` +
+    `• Pin posts after sending\n` +
+    `• Multi-channel post broadcasting\n\n</blockquote>` +
+    
+    `<i>Content Creation:</i>\n` +
+    `<blockquote>• Rich text formatting with HTML support\n` +
+    `• Media attachments (photos, videos, documents)\n` +
+    `• Interactive inline buttons\n\n</blockquote>` +
+    
+    `<i>Native & Smart Scheduling:</i>\n` +
+    `<blockquote>• Schedule posts for future delivery\n` +
+    `• Custom timezone support\n` +
+    `• Queue management and viewing\n` +
+    `• Automatic post publishing\n\n</blockquote>` +
+    
+    `<i>Personal Bot Integration:</i>\n` +
+    `<blockquote>• Your own dedicated bot instance\n` +
+    `• Complete channel control\n` +
+    `• Private token management (encrypted with AES-256-GCM)\n` +
+    `• Independent operation\n\n</blockquote>`;
+
+  const keyboard = new InlineKeyboard()
+    .text("Help", "about:help")
+    .row()
     .text("Back", "about:back")
     .row()
     .text("Close", "about:close");
@@ -115,6 +152,15 @@ export function addStartCommand(bot: Bot<BotContext>, isPersonalBot = false) {
     
     try {
       switch (action) {
+        case "features":
+          const { text: featuresText, keyboard: featuresKeyboard } = createFeaturesMessage(isPersonalBot);
+          await ctx.editMessageText(featuresText, {
+            parse_mode: "HTML",
+            reply_markup: featuresKeyboard,
+            link_preview_options: { is_disabled: true }
+          });
+          break;
+          
         case "help":
           const { text: helpText, keyboard: helpKeyboard } = createHelpMessage(isPersonalBot);
           await ctx.editMessageText(helpText, {
