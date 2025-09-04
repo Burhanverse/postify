@@ -6,132 +6,68 @@ import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
 import { getOrCreateUserBot, forceStopBot } from "./userBotRegistry";
 import { BotContext } from "../telegram/bot";
+import { decrypt } from "../utils/crypto";
 
-export async function publishPost(post: Post & { _id: Types.ObjectId }) {
-  const channel = await ChannelModel.findById(post.channel);
-  if (!channel) {
-    logger.error({ postId: post._id.toString() }, "Channel not found for post");
-    throw new Error("Channel not found");
-  }
+// Create an API-only bot instance for publishing (no polling/getUpdates)
+async function createApiOnlyBot(botId: number): Promise<Bot<BotContext>> {
+  const record = await UserBotModel.findOne({ botId, status: "active" });
+  if (!record) throw new Error("User bot not found or inactive");
+  
+  const rawToken = record.tokenEncrypted
+    ? decrypt(record.tokenEncrypted)
+    : record.token;
+  if (!rawToken) throw new Error("Bot token missing or invalid");
+  
+  // Create bot instance WITHOUT starting polling - only for API calls
+  const bot = new Bot<BotContext>(rawToken);
+  
+  return bot;
+}
 
-  const chatId = channel.chatId;
-  logger.info(
-    { postId: post._id.toString(), chatId },
-    "Publishing post to channel",
-  );
-
-  if (!channel.botId) {
-    logger.error({ channelId: channel._id }, "Channel missing botId – blocked");
-    throw new Error(
-      "Channel not bound to personal bot. Relink via personal bot /addchannel.",
-    );
-  }
-
+export async function publishPersonal(
+  post: Post & { _id: Types.ObjectId },
+  channel: ChannelDoc,
+  chatId: number,
+) {
   const userBotRecord = await UserBotModel.findOne({
     botId: channel.botId,
     status: "active",
   });
   if (!userBotRecord) {
-    throw new Error("Personal bot inactive or missing.");
+    throw new Error("Personal bot not found for channel");
   }
 
-  // Retry logic for bot conflicts
-  let retryCount = 0;
-  const maxRetries = 2;
+  try {
+    logger.debug(
+      { chatId, botId: userBotRecord.botId },
+      "Publisher: creating API-only bot & checking permissions",
+    );
+    
+    // Use API-only bot instead of full bot instance to avoid 409 conflicts
+    const personalBot = await createApiOnlyBot(userBotRecord.botId);
+    
+    const botMember = await personalBot.api.getChatMember(
+      chatId,
+      userBotRecord.botId,
+    );
+    const canPost =
+      botMember.status === "administrator" || botMember.status === "creator";
+    if (!canPost) throw new Error("Personal bot lacks posting rights");
+    
+    logger.debug(
+      { chatId, botId: userBotRecord.botId },
+      "Publisher: permission check passed",
+    );
 
-  while (retryCount <= maxRetries) {
-    try {
-      logger.debug(
-        { chatId, botId: userBotRecord.botId, attempt: retryCount + 1 },
-        "Publisher: fetching personal bot & checking permissions",
-      );
-      const personalBot = await getOrCreateUserBot(userBotRecord.botId);
-      const botMember = await personalBot.api.getChatMember(
-        chatId,
-        userBotRecord.botId,
-      );
-      const canPost =
-        botMember.status === "administrator" || botMember.status === "creator";
-      if (!canPost) throw new Error("Personal bot lacks posting rights");
-      logger.debug(
-        { chatId, botId: userBotRecord.botId },
-        "Publisher: permission check passed",
-      );
-
-      // Return the bot instance for reuse
-      return await publishWithBot(post, channel, chatId, personalBot);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-
-      // Check if this is a 409 conflict error
-      if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
-        retryCount++;
-        logger.warn(
-          {
-            err,
-            chatId,
-            botId: userBotRecord.botId,
-            attempt: retryCount,
-            maxRetries,
-          },
-          "409 conflict detected in publisher - retrying after delay",
-        );
-
-        if (retryCount > maxRetries) {
-          logger.error(
-            { err, chatId, botId: userBotRecord.botId, attempts: retryCount },
-            "Max retries exceeded for 409 conflict - forcing bot cleanup",
-          );
-
-          // Force stop the bot to clean up any zombie instances
-          try {
-            await forceStopBot(userBotRecord.botId);
-            logger.info(
-              { botId: userBotRecord.botId },
-              "Force stopped bot after persistent 409 conflicts",
-            );
-          } catch (forceStopError) {
-            logger.error(
-              { forceStopError, botId: userBotRecord.botId },
-              "Error during force stop",
-            );
-          }
-
-          throw new Error(
-            "Bot instance conflict detected. Bot has been reset. Please try again in a few moments.",
-          );
-        }
-
-        // For retries, force stop the bot first to ensure clean restart
-        if (retryCount === 1) {
-          logger.info(
-            { botId: userBotRecord.botId },
-            "First 409 retry - performing force stop for clean restart",
-          );
-          try {
-            await forceStopBot(userBotRecord.botId);
-          } catch (forceStopError) {
-            logger.warn(
-              { forceStopError, botId: userBotRecord.botId },
-              "Error during force stop before retry",
-            );
-          }
-        }
-
-        // Wait before retry (exponential backoff)
-        const delayMs = Math.pow(2, retryCount) * 1000; // 2s, 4s, 8s
-        logger.debug({ delayMs, attempt: retryCount }, "Waiting before retry");
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        continue; // Retry the loop
-      }
-
-      // For non-409 errors, don't retry
-      logger.warn(
-        { err, chatId, botId: userBotRecord.botId },
-        "Failed permission check for personal bot - not retrying",
-      );
-      throw err instanceof Error ? err : new Error("Permission check failed");
-    }
+    // Use the API-only bot instance for publishing
+    return await publishWithBot(post, channel, chatId, personalBot);
+  } catch (err) {
+    // For API-only bots, most errors are not recoverable by retry
+    logger.warn(
+      { err, chatId, botId: userBotRecord.botId },
+      "Failed to use personal bot for publishing",
+    );
+    throw err instanceof Error ? err : new Error("Personal bot publishing failed");
   }
 }
 
