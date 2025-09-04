@@ -5,6 +5,10 @@ import {
   loadAllUserBotsOnStartup,
   stopAllUserBots,
 } from "./services/userBotRegistry";
+import {
+  startBotHealthMonitor,
+  stopBotHealthMonitor,
+} from "./services/botHealthMonitor";
 import { logger } from "./utils/logger";
 import { env } from "./config/env";
 
@@ -23,6 +27,9 @@ async function gracefulShutdown(signal: string) {
   );
 
   try {
+    // Stop health monitor first
+    stopBotHealthMonitor();
+
     await stopAllUserBots();
 
     // Stop the main bot
@@ -68,6 +75,9 @@ async function main() {
   } else {
     launchBot();
     await loadAllUserBotsOnStartup();
+    
+    // Start health monitor after all bots are loaded
+    startBotHealthMonitor();
 
     logger.info(
       "Application started successfully. Press Ctrl+C to stop gracefully.",

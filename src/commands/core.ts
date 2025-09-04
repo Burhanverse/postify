@@ -2,7 +2,7 @@ import { Bot, InlineKeyboard } from "grammy";
 import { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 import { UserBotModel } from "../models/UserBot";
-import { getOrCreateUserBot } from "../services/userBotRegistry";
+import { getOrCreateUserBot, listActiveUserBots } from "../services/userBotRegistry";
 import { encrypt } from "../utils/crypto";
 import { validateBotTokenFormat } from "../utils/tokens";
 import { getPackageInfo } from "../utils/packageInfo";
@@ -238,11 +238,46 @@ export function registerCoreCommands(bot: Bot<BotContext>) {
       await ctx.reply("No personal bot configured. Use /addbot to add one.");
       return;
     }
-    let msg = `Personal Bot:\nUsername: @${ub.username}\nBot ID: ${ub.botId}\nStatus: ${ub.status}\nToken last 4: ...${ub.tokenLastFour}`;
+
+    // Check if bot is currently active in registry
+    const activeBots = listActiveUserBots();
+    const isActiveInRegistry = activeBots.includes(ub.botId);
+    const registryStatus = isActiveInRegistry ? "✅ Running" : "❌ Not Running";
+
+    let msg = [
+      "**Personal Bot Status**",
+      "",
+      `**Username:** @${ub.username}`,
+      `**Bot ID:** ${ub.botId}`,
+      `**Database Status:** ${ub.status}`,
+      `**Registry Status:** ${registryStatus}`,
+      `**Token:** ...${ub.tokenLastFour}`,
+    ];
+
     if (ub.lastError) {
-      msg += `\nLast error: ${ub.lastError}`;
+      msg.push(`**Last Error:** ${ub.lastError}`);
     }
-    await ctx.reply(msg);
+
+    if (ub.lastSeenAt) {
+      msg.push(`**Last Seen:** ${ub.lastSeenAt.toISOString()}`);
+    }
+
+    // Add troubleshooting tips if there are issues
+    if (ub.status === "error" || !isActiveInRegistry) {
+      msg.push("");
+      msg.push("**Troubleshooting:**");
+      if (ub.status === "error") {
+        msg.push("• Bot is in error state - check the error message above");
+        msg.push("• You may need to re-add your bot if the token is invalid");
+      }
+      if (!isActiveInRegistry) {
+        msg.push("• Bot is not running in the registry");
+        msg.push("• Try using your bot - it will restart automatically");
+        msg.push("• If issues persist, contact support");
+      }
+    }
+
+    await ctx.reply(msg.join("\n"), { parse_mode: "Markdown" });
   });
 
   // Unlink flow with confirmation

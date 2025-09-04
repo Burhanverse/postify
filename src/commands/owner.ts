@@ -3,6 +3,11 @@ import { BotContext } from "../telegram/bot";
 import { UserBotModel } from "../models/UserBot";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";
+import {
+  getBotStatus,
+  cleanupStaleBots,
+  clearFailedBots,
+} from "../services/userBotRegistry";
 
 // Middleware to check if user is the bot owner
 function isOwner(ctx: BotContext): boolean {
@@ -138,6 +143,122 @@ export function registerOwnerCommands(bot: Bot<BotContext>) {
         "Error in bot_status command",
       );
       await ctx.reply("Error getting bot status. Check logs for details.");
+    }
+  });
+
+  // Show detailed bot registry status
+  bot.command("botstatus", async (ctx) => {
+    if (!isOwner(ctx)) {
+      await ctx.reply("This command is only available to the bot owner.");
+      return;
+    }
+
+    try {
+      const status = getBotStatus();
+      
+      const message = [
+        "**Bot Registry Status**",
+        "",
+        `**Active in Registry:** ${status.active}`,
+        `**Creating:** ${status.creating}`,
+        `**Failed:** ${status.failed}`,
+        "",
+      ];
+
+      if (status.details.length > 0) {
+        message.push("**Active Bot Details:**");
+        status.details.forEach((bot) => {
+          const statusIcon = bot.isRunning && bot.actuallyRunning ? "✅" : "❌";
+          message.push(
+            `${statusIcon} Bot ${bot.botId} (${bot.username || "unknown"})`,
+          );
+          message.push(`   Owner: ${bot.ownerTgId}`);
+          message.push(`   Started: ${bot.startedAt.toISOString()}`);
+          message.push(`   Failures: ${bot.failures}`);
+          message.push(`   Registry Running: ${bot.isRunning}`);
+          message.push(`   Actually Running: ${bot.actuallyRunning}`);
+          message.push("");
+        });
+      }
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
+    } catch (error) {
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in botstatus command",
+      );
+      await ctx.reply("Error getting detailed bot status. Check logs for details.");
+    }
+  });
+
+  // Clean up stale bot instances
+  bot.command("cleanup", async (ctx) => {
+    if (!isOwner(ctx)) {
+      await ctx.reply("This command is only available to the bot owner.");
+      return;
+    }
+
+    try {
+      const cleanedCount = cleanupStaleBots();
+      const statusAfter = getBotStatus();
+      
+      const message = [
+        "**Bot Cleanup Complete**",
+        "",
+        `**Cleaned up:** ${cleanedCount} stale bot instances`,
+        `**Active after cleanup:** ${statusAfter.active}`,
+        `**Creating:** ${statusAfter.creating}`,
+        `**Failed:** ${statusAfter.failed}`,
+      ];
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
+      
+      logger.info(
+        { cleanedCount, statusAfter, userId: ctx.from?.id },
+        "Owner performed bot cleanup",
+      );
+    } catch (error) {
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in cleanup command",
+      );
+      await ctx.reply("Error during bot cleanup. Check logs for details.");
+    }
+  });
+
+  // Clear failed bots list
+  bot.command("clearfailed", async (ctx) => {
+    if (!isOwner(ctx)) {
+      await ctx.reply("This command is only available to the bot owner.");
+      return;
+    }
+
+    try {
+      const statusBefore = getBotStatus();
+      clearFailedBots();
+      const statusAfter = getBotStatus();
+      
+      const message = [
+        "**Failed Bots List Cleared**",
+        "",
+        `**Failed before:** ${statusBefore.failed}`,
+        `**Failed after:** ${statusAfter.failed}`,
+        "",
+        "Failed bots can now be restarted immediately.",
+      ];
+
+      await ctx.reply(message.join("\n"), { parse_mode: "Markdown" });
+      
+      logger.info(
+        { statusBefore: statusBefore.failed, userId: ctx.from?.id },
+        "Owner cleared failed bots list",
+      );
+    } catch (error) {
+      logger.error(
+        { error, userId: ctx.from?.id },
+        "Error in clearfailed command",
+      );
+      await ctx.reply("Error clearing failed bots list. Check logs for details.");
     }
   });
 }

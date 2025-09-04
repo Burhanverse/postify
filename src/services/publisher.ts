@@ -52,6 +52,18 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
       "Publisher: permission check passed",
     );
   } catch (err) {
+    // Check if this is a 409 conflict error
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    if (errorMessage.includes("409") && errorMessage.includes("Conflict")) {
+      logger.error(
+        { err, chatId, botId: userBotRecord.botId },
+        "409 conflict detected in publisher - bot instance conflict",
+      );
+      throw new Error(
+        "Bot instance conflict detected. Please wait a few minutes and try again.",
+      );
+    }
+    
     logger.warn(
       { err, chatId, botId: userBotRecord.botId },
       "Failed permission check for personal bot",
