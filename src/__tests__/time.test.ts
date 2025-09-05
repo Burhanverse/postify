@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nextMinuteUTC, toZone } from "../utils/time.js";
+import { nextMinuteUTC, toZone } from "../utils/time";
 import { DateTime } from "luxon";
 
 describe("time utils", () => {

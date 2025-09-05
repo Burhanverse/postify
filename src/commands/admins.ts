@@ -1,5 +1,5 @@
 import { Bot } from "grammy";
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { ChannelModel } from "../models/Channel";
 interface AdminEntry {
   userId: number;

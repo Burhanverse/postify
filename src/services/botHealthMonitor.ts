@@ -1,5 +1,9 @@
 import { logger } from "../utils/logger";
-import { cleanupStaleBots, getBotStatus, detectBotConflicts } from "./userBotRegistry";
+import {
+  cleanupStaleBots,
+  getBotStatus,
+  detectBotConflicts,
+} from "./userBotRegistry";
 
 let healthCheckInterval: NodeJS.Timeout | null = null;
 
@@ -15,7 +19,7 @@ export function startBotHealthMonitor() {
       try {
         // Check for potential conflicts first
         detectBotConflicts();
-        
+
         // Then cleanup stale bots
         const cleanedCount = cleanupStaleBots();
         if (cleanedCount > 0) {

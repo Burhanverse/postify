@@ -1,4 +1,4 @@
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { InlineKeyboard } from "grammy";
 import { postScheduler } from "../services/scheduler";
 import { ChannelModel } from "../models/Channel";

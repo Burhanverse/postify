@@ -4,7 +4,6 @@ import { ChannelModel, type ChannelDoc } from "../models/Channel";
 import { PostModel, type Post } from "../models/Post";
 import { Types } from "mongoose";
 import { clearAllDraftData } from "../middleware/sessionCleanup";
-import { logger } from "../utils/logger";
 
 interface DraftData {
   postType?: "text" | "photo" | "video";
@@ -14,9 +13,6 @@ interface DraftData {
 }
 
 export class PostPublisher {
-  /**
-   * Validates that the post can be sent
-   */
   static async validatePostSending(
     ctx: BotContext,
   ): Promise<{ success: boolean; channel?: ChannelDoc; error?: string }> {
@@ -51,7 +47,6 @@ export class PostPublisher {
       };
     }
 
-    // Ensure channel is bound to a personal bot
     if (!channel.botId) {
       return {
         success: false,
@@ -60,21 +55,19 @@ export class PostPublisher {
       };
     }
 
-    // Quick active personal bot record check before creating DB post
     const { UserBotModel } = await import("../models/UserBot");
     const userBotRecord = await UserBotModel.findOne({
       botId: channel.botId,
       status: "active",
     });
-    
+
     if (!userBotRecord) {
       // Check if there's a bot record with different status
       const anyBotRecord = await UserBotModel.findOne({ botId: channel.botId });
       if (anyBotRecord) {
         return {
           success: false,
-          error:
-            `**Personal bot has issues**\n\nThe bot linked to this channel has status: "${anyBotRecord.status}". Please use /mybot to check your bot status and fix any issues, or relink this channel to your active personal bot.`,
+          error: `**Personal bot has issues**\n\nThe bot linked to this channel has status: "${anyBotRecord.status}". Please use /mybot to check your bot status and fix any issues, or relink this channel to your active personal bot.`,
         };
       } else {
         return {
@@ -88,7 +81,7 @@ export class PostPublisher {
     // Check if bot instance is available in registry (even if still starting up)
     const { getExistingUserBot } = await import("./userBotRegistry");
     const botInstance = getExistingUserBot(channel.botId);
-    
+
     if (!botInstance) {
       return {
         success: false,
@@ -96,8 +89,6 @@ export class PostPublisher {
           "**Personal bot not loaded**\n\nYour personal bot is registered but not loaded in memory. Try restarting the main application or use /mybot to check status.",
       };
     }
-
-    // Bot is available, let the publisher handle the actual API calls
 
     return { success: true, channel };
   }
@@ -118,14 +109,12 @@ export class PostPublisher {
     const channel = validation.channel;
     const draft = ctx.session.draft!;
 
-    // Provide immediate feedback
     try {
       const feedbackText = pinAfterPosting ? "Sending & pinning…" : "Sending…";
       await ctx.answerCallbackQuery({ text: feedbackText });
     } catch {}
 
     try {
-      // Create the post in the database
       const post = await PostModel.create({
         channel: channel._id,
         channelChatId: channel.chatId,
@@ -143,7 +132,6 @@ export class PostPublisher {
         post._id.toString(),
       );
 
-      // Publish immediately using the publisher service
       const { publishPost } = await import("./publisher");
       await publishPost(post as Post & { _id: Types.ObjectId });
 
@@ -151,7 +139,6 @@ export class PostPublisher {
         `Published${pinAfterPosting ? " and pinned" : ""} post successfully`,
       );
 
-      // Clear draft session
       clearAllDraftData(ctx);
 
       const successMessage = pinAfterPosting
@@ -164,7 +151,6 @@ export class PostPublisher {
       try {
         await ctx.answerCallbackQuery();
       } catch {}
-      // Unlock to let user adjust after failure
       delete ctx.session.draftLocked;
 
       await this.handlePublishError(ctx, error, draft, pinAfterPosting);

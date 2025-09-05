@@ -1,10 +1,5 @@
 import { Bot } from "grammy";
 import type { BotContext } from "../telegram/bot";
-import { wrapCommand } from "../utils/commandHelpers";
-import {
-  requireSelectedChannel,
-  requirePostPermission,
-} from "../middleware/auth";
 import { CallbackHandler } from "../services/callbackHandler";
 import { MediaHandler } from "../services/mediaHandler";
 import { TextInputHandler } from "../services/textInputHandler";
@@ -15,8 +10,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   bot.on("callback_query:data", async (ctx, next) => {
     const data = ctx.callbackQuery?.data;
     if (!data) return next();
-
-    // Try to handle with the callback handler
     const handled = await CallbackHandler.handleCallback(ctx, data);
     if (handled) return;
 
@@ -59,13 +52,10 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   // Media handlers
   bot.on(["message:photo", "message:video"], async (ctx, next) => {
     const msg = ctx.message;
-
-    // Try photo first
     if ("photo" in msg && (await MediaHandler.handlePhotoMessage(ctx, msg))) {
       return;
     }
 
-    // Try video
     if ("video" in msg && (await MediaHandler.handleVideoMessage(ctx, msg))) {
       return;
     }
@@ -84,7 +74,6 @@ export function registerPostCommands(bot: Bot<BotContext>) {
     return next();
   });
 
-  // Handle edited text messages for drafts
   bot.on("edited_message:text", async (ctx, next) => {
     const text = ctx.editedMessage.text;
 

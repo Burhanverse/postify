@@ -1,6 +1,6 @@
 import { Bot } from "grammy";
 import type { BotCommand } from "grammy/types";
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 
 /**

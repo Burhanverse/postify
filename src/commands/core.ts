@@ -1,5 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 import { UserBotModel } from "../models/UserBot";
 import {
@@ -25,7 +25,7 @@ const BOT_INFO = {
 
 // Helper function to create the about/start message
 async function createAboutMessage(
-  ctx: BotContext,
+  _ctx: BotContext,
   isPersonalBot = false,
 ): Promise<{ text: string; keyboard: InlineKeyboard }> {
   const text =
@@ -114,7 +114,7 @@ function createHelpMessage(isPersonalBot = false): {
 }
 
 // Helper function to create features message
-function createFeaturesMessage(isPersonalBot = false): {
+function createFeaturesMessage(_isPersonalBot = false): {
   text: string;
   keyboard: InlineKeyboard;
 } {

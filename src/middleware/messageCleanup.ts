@@ -1,7 +1,7 @@
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 
-const MAX_TRACKED_MESSAGES = 10; // Maximum number of bot messages to track for cleanup
+const MAX_TRACKED_MESSAGES = 10;
 
 export async function messageCleanupMiddleware(
   ctx: BotContext,
@@ -10,7 +10,6 @@ export async function messageCleanupMiddleware(
   const chatId = ctx.chat?.id;
   if (!chatId) return next();
 
-  // Initialize session tracking if not exists
   if (!ctx.session.recentBotMessages) {
     ctx.session.recentBotMessages = [];
   }
@@ -22,17 +21,14 @@ export async function messageCleanupMiddleware(
   }
 
   // Clean up old bot messages before processing new command/message
-  // Only cleanup on user-initiated actions (commands or messages)
   if (ctx.message || (ctx.callbackQuery && !isProtectedCallback(ctx))) {
     await cleanupOldMessages(ctx);
   }
 
-  // Store original reply methods to intercept and track bot messages
   const originalReply = ctx.reply.bind(ctx);
   const originalReplyWithPhoto = ctx.replyWithPhoto?.bind(ctx);
   const originalReplyWithVideo = ctx.replyWithVideo?.bind(ctx);
 
-  // Override reply methods to track sent messages and disable link previews
   ctx.reply = async (text: string, other?: Record<string, unknown>) => {
     const options = {
       ...other,
@@ -79,14 +75,8 @@ export async function messageCleanupMiddleware(
 function isProtectedCallback(ctx: BotContext): boolean {
   const data = ctx.callbackQuery?.data;
   if (!data) return false;
-
-  // Protect scheduling-related callbacks
   if (data.startsWith("schedule_") || data.includes("queue")) return true;
-
-  // Protect draft preview callbacks (don't cleanup when user interacts with draft)
   if (data.startsWith("draft:") && !data.includes("preview")) return true;
-
-  // Protect newpost channel selection callbacks
   if (data.startsWith("newpost:select:")) return true;
 
   return false;
@@ -129,7 +119,6 @@ function trackBotMessage(
         ctx.session.protectedMessages.scheduleMessages = [];
       }
       ctx.session.protectedMessages.scheduleMessages.push(messageId);
-      // Keep only last 3 schedule messages
       if (ctx.session.protectedMessages.scheduleMessages.length > 3) {
         ctx.session.protectedMessages.scheduleMessages.shift();
       }
@@ -140,21 +129,18 @@ function trackBotMessage(
         ctx.session.protectedMessages.postSentNotices = [];
       }
       ctx.session.protectedMessages.postSentNotices.push(messageId);
-      // Keep only last 2 post sent notices
       if (ctx.session.protectedMessages.postSentNotices.length > 2) {
         ctx.session.protectedMessages.postSentNotices.shift();
       }
       break;
 
     case "draft_preview":
-      // Update current draft preview (only keep one active)
       ctx.session.protectedMessages.currentDraftPreview = messageId;
       break;
 
     default:
       // Track general messages for cleanup
       ctx.session.recentBotMessages.push(messageId);
-      // Keep only recent messages
       if (ctx.session.recentBotMessages.length > MAX_TRACKED_MESSAGES) {
         ctx.session.recentBotMessages.shift();
       }
@@ -164,8 +150,6 @@ function trackBotMessage(
 async function cleanupOldMessages(ctx: BotContext) {
   const chatId = ctx.chat!.id;
   const messagesToClean = [...(ctx.session.recentBotMessages || [])];
-
-  // Get all protected message IDs
   const protectedIds = new Set([
     ...(ctx.session.protectedMessages?.scheduleMessages || []),
     ...(ctx.session.protectedMessages?.postSentNotices || []),
@@ -174,15 +158,12 @@ async function cleanupOldMessages(ctx: BotContext) {
   if (ctx.session.protectedMessages?.currentDraftPreview) {
     protectedIds.add(ctx.session.protectedMessages.currentDraftPreview);
   }
-
-  // Clean up messages that are not protected
   const toDelete = messagesToClean.filter((id) => !protectedIds.has(id));
 
   for (const messageId of toDelete) {
     try {
       await ctx.api.deleteMessage(chatId, messageId);
     } catch (error) {
-      // Ignore errors (message might already be deleted or too old)
       logger.debug({ error, messageId, chatId }, "Failed to delete message");
     }
   }

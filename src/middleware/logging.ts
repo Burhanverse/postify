@@ -1,4 +1,4 @@
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 
 export async function loggingMiddleware(

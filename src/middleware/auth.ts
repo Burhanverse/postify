@@ -1,4 +1,4 @@
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { ChannelModel } from "../models/Channel";
 import { logger } from "../utils/logger";
 

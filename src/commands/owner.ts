@@ -1,5 +1,5 @@
 import { Bot } from "grammy";
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { UserBotModel } from "../models/UserBot";
 import { env } from "../config/env";
 import { logger } from "../utils/logger";

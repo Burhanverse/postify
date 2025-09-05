@@ -17,7 +17,7 @@ import {
   handleChannelCallback,
 } from "../commands/channels";
 import { addStartCommand } from "../commands/core";
-import { decrypt } from "../utils/crypto.js";
+import { decrypt } from "../utils/crypto";
 
 interface ActiveBotMeta {
   bot: Bot<BotContext>;
@@ -25,23 +25,14 @@ interface ActiveBotMeta {
   username?: string;
   failures: number;
   startedAt: Date;
-  isRunning?: boolean; // Track if bot is actually running
+  isRunning?: boolean;
 }
 
 const activeBots = new Map<number, ActiveBotMeta>();
-
-// Track bots that are currently being created to avoid races that would
-// spawn multiple Bot instances for the same token (causes Telegram 409).
 const creatingBots = new Map<number, Promise<Bot<BotContext>>>();
-
-// Track bots that failed during startup to avoid repeated attempts
 const failedBots = new Set<number>();
 
-// Global creation lock to prevent any race conditions
 let globalCreationLock = false;
-
-// Track startup completion
-let startupComplete = false;
 
 // Ownership guard middleware
 function personalBotOwnershipGuard(ownerId: number) {
@@ -59,25 +50,6 @@ function initial(): SessionData {
 
 /**
  * CRITICAL: Personal Bot Instance Management
- * 
- * Each personal bot MUST use a single polling session for ALL operations.
- * Creating multiple Bot instances for the same token causes:
- * - Telegram 409 "Conflict: terminated by other getUpdates request" errors
- * - "Wrong file identifier" errors when sending media
- * - Session state mismatches
- * 
- * USAGE RULES:
- * 1. Use getExistingUserBot() for ALL operational tasks (publishing, API calls)
- * 2. Use getOrCreateUserBot() ONLY for startup and explicit bot creation
- * 3. NEVER create new Bot(token) instances for existing registered bots
- * 4. Always reuse the polling bot instance from the registry
- */
-
-/**
- * Gets an existing active bot instance from the registry.
- * Does NOT create a new bot instance if one doesn't exist.
- * Use this for all operational tasks (publishing, etc.) to avoid 409 conflicts.
- * Returns bot even if it's still starting up (isRunning=false).
  */
 export function getExistingUserBot(botId: number): Bot<BotContext> | null {
   const existing = activeBots.get(botId);
@@ -88,13 +60,7 @@ export function getExistingUserBot(botId: number): Bot<BotContext> | null {
   return null;
 }
 
-/**
- * Gets an existing bot or creates a new one if it doesn't exist.
- * Only use this during startup or explicit bot creation scenarios.
- * For publishing and other operations, use getExistingUserBot instead.
- */
 export async function getOrCreateUserBot(botId: number) {
-  // Global lock to prevent any concurrent bot creation
   while (globalCreationLock) {
     logger.debug({ botId }, "Waiting for global creation lock to release");
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -105,18 +71,14 @@ export async function getOrCreateUserBot(botId: number) {
   try {
     const existing = activeBots.get(botId);
     if (existing && existing.isRunning) {
-      // Double-check that the bot is actually running
       if (existing.bot.isRunning()) {
         return existing.bot;
       } else {
-        // Bot is marked as running but actually stopped, clean it up
         logger.warn({ botId }, "Found stale bot entry, cleaning up");
         activeBots.delete(botId);
       }
     }
 
-    // If creation is in-flight for the same botId, wait for it instead of
-    // creating another Bot instance which would cause a Telegram 409 error.
     const inFlight = creatingBots.get(botId);
     if (inFlight) {
       logger.debug(
@@ -126,7 +88,6 @@ export async function getOrCreateUserBot(botId: number) {
       return inFlight;
     }
 
-    // Don't try to restart bots that failed recently
     if (failedBots.has(botId)) {
       logger.warn(
         { botId, failedBotsCount: failedBots.size },
@@ -137,7 +98,7 @@ export async function getOrCreateUserBot(botId: number) {
       );
     }
 
-    // IMMEDIATE pre-emptive cleanup: if there's any existing bot instance for this botId, stop it first
+    // IMMEDIATE pre-emptive cleanup
     const existingBot = activeBots.get(botId);
     if (existingBot) {
       logger.warn(
@@ -157,7 +118,6 @@ export async function getOrCreateUserBot(botId: number) {
       }
       activeBots.delete(botId);
 
-      // Add a slightly longer delay to ensure cleanup is complete
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
 
@@ -184,8 +144,6 @@ export async function getOrCreateUserBot(botId: number) {
 
       registerPostCommands(bot);
       registerChannelsCommands(bot, { enableLinking: true });
-
-      // Add enhanced start/about command for personal bots
       addStartCommand(bot, true);
 
       // Check channels command
@@ -216,7 +174,6 @@ export async function getOrCreateUserBot(botId: number) {
             channel.title || channel.username || channel.chatId.toString();
 
           try {
-            // Test if bot can send to the channel
             const chatMember = await bot.api.getChatMember(
               channel.chatId,
               record.botId,
@@ -272,8 +229,6 @@ export async function getOrCreateUserBot(botId: number) {
         const meta = activeBots.get(botId);
         if (meta) {
           meta.failures += 1;
-
-          // Check if this is a 409 conflict error
           const errorMessage = err instanceof Error ? err.message : String(err);
           if (
             errorMessage.includes("409") &&
@@ -284,7 +239,6 @@ export async function getOrCreateUserBot(botId: number) {
               "Telegram 409 conflict detected - multiple instances running",
             );
 
-            // Mark bot as not running and remove from active bots
             meta.isRunning = false;
             activeBots.delete(botId);
             failedBots.add(botId);
@@ -292,9 +246,7 @@ export async function getOrCreateUserBot(botId: number) {
             // Stop the bot instance
             try {
               meta.bot.stop();
-            } catch (e) {
-              // Ignore stop errors
-            }
+            } catch (e) {}
 
             // Set a longer timeout for 409 errors (15 minutes)
             setTimeout(
@@ -319,20 +271,18 @@ export async function getOrCreateUserBot(botId: number) {
         username: record.username || undefined,
         failures: 0,
         startedAt: new Date(),
-        isRunning: false, // Will be set to true after successful start
+        isRunning: false,
       });
 
       // Start bot asynchronously and update status when ready
       bot
         .start({ drop_pending_updates: true })
         .then(() => {
-          // Update the existing entry to mark as running
           const meta = activeBots.get(botId);
           if (meta) {
             meta.isRunning = true;
           }
 
-          // Remove from failed bots if it was there
           failedBots.delete(botId);
 
           logger.info(
@@ -341,117 +291,110 @@ export async function getOrCreateUserBot(botId: number) {
           );
         })
         .catch(async (err) => {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        const is409Conflict =
-          errorMessage.includes("409") && errorMessage.includes("Conflict");
-        const is401Unauthorized =
-          errorMessage.includes("401") &&
-          errorMessage.includes("Unauthorized");
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          const is409Conflict =
+            errorMessage.includes("409") && errorMessage.includes("Conflict");
+          const is401Unauthorized =
+            errorMessage.includes("401") &&
+            errorMessage.includes("Unauthorized");
 
-        // IMMEDIATE aggressive cleanup for 409 conflicts
-        if (is409Conflict) {
-          logger.warn(
-            { botId },
-            "409 conflict detected - performing IMMEDIATE aggressive cleanup",
+          // IMMEDIATE aggressive cleanup for 409 conflicts
+          if (is409Conflict) {
+            logger.warn(
+              { botId },
+              "409 conflict detected - performing IMMEDIATE aggressive cleanup",
+            );
+
+            activeBots.delete(botId);
+            failedBots.add(botId);
+
+            try {
+              await bot.stop();
+            } catch (e) {
+              logger.debug(
+                { e, botId },
+                "Error stopping bot during immediate 409 cleanup",
+              );
+            }
+          }
+
+          logger.error(
+            { err, botId, is409Conflict, is401Unauthorized },
+            "Failed to start personal bot",
           );
 
-          // Immediately remove from active bots and mark as failed
-          activeBots.delete(botId);
           failedBots.add(botId);
 
-          // Try to force stop any remaining instances
+          let timeoutMinutes;
+          if (is401Unauthorized) {
+            timeoutMinutes = 60;
+          } else if (is409Conflict) {
+            timeoutMinutes = 15;
+          } else {
+            timeoutMinutes = 10;
+          }
+
+          setTimeout(
+            () => {
+              failedBots.delete(botId);
+              logger.debug(
+                { botId, was409: is409Conflict, was401: is401Unauthorized },
+                "Removed bot from failed list, allowing retry",
+              );
+            },
+            timeoutMinutes * 60 * 1000,
+          );
+
+          // Update database status
+          const newStatus = is401Unauthorized ? "disabled" : "error";
+          const errorPrefix = is401Unauthorized
+            ? "Invalid/revoked token: "
+            : "";
+
+          await UserBotModel.updateOne(
+            { botId },
+            {
+              $set: {
+                status: newStatus,
+                lastError: errorPrefix + errorMessage,
+              },
+            },
+          );
+
+          if (is401Unauthorized) {
+            logger.warn(
+              { botId },
+              "Bot token is invalid or revoked - bot disabled until token is updated",
+            );
+          } else if (is409Conflict) {
+            logger.warn(
+              { botId },
+              "409 conflict detected, performing aggressive cleanup",
+            );
+
+            if (activeBots.has(botId)) {
+              const existingMeta = activeBots.get(botId);
+              if (existingMeta) {
+                existingMeta.isRunning = false;
+              }
+              activeBots.delete(botId);
+            }
+          }
+
           try {
             await bot.stop();
           } catch (e) {
             logger.debug(
               { e, botId },
-              "Error stopping bot during immediate 409 cleanup",
+              "Error stopping bot during cleanup (expected)",
             );
           }
-        }
-
-        logger.error(
-          { err, botId, is409Conflict, is401Unauthorized },
-          "Failed to start personal bot",
-        );
-
-        // Mark as failed to prevent immediate retry
-        failedBots.add(botId);
-
-        // Different timeout strategies based on error type
-        let timeoutMinutes;
-        if (is401Unauthorized) {
-          // 401 errors are permanent until token is fixed - longer timeout
-          timeoutMinutes = 60; // 1 hour
-        } else if (is409Conflict) {
-          timeoutMinutes = 15;
-        } else {
-          timeoutMinutes = 10;
-        }
-
-        setTimeout(
-          () => {
-            failedBots.delete(botId);
-            logger.debug(
-              { botId, was409: is409Conflict, was401: is401Unauthorized },
-              "Removed bot from failed list, allowing retry",
-            );
-          },
-          timeoutMinutes * 60 * 1000,
-        );
-
-        // Update database status - for 401 errors, set status to disabled
-        const newStatus = is401Unauthorized ? "disabled" : "error";
-        const errorPrefix = is401Unauthorized
-          ? "Invalid/revoked token: "
-          : "";
-
-        await UserBotModel.updateOne(
-          { botId },
-          {
-            $set: {
-              status: newStatus,
-              lastError: errorPrefix + errorMessage,
-            },
-          },
-        );
-
-        // Special handling for different error types
-        if (is401Unauthorized) {
-          logger.warn(
-            { botId },
-            "Bot token is invalid or revoked - bot disabled until token is updated",
-          );
-        } else if (is409Conflict) {
-          logger.warn(
-            { botId },
-            "409 conflict detected, performing aggressive cleanup",
-          );
-
-          // Remove from active bots if somehow still there
-          if (activeBots.has(botId)) {
-            const existingMeta = activeBots.get(botId);
-            if (existingMeta) {
-              existingMeta.isRunning = false;
-            }
-            activeBots.delete(botId);
-          }
-        }
-
-        // Stop the bot if it was partially started
-        try {
-          await bot.stop();
-        } catch (e) {
-          logger.debug(
-            { e, botId },
-            "Error stopping bot during cleanup (expected)",
-          );
-        }
-      });
+        });
 
       // Return the bot immediately, even if start is still in progress
       return bot;
-    })();    creatingBots.set(botId, creation);
+    })();
+    creatingBots.set(botId, creation);
     try {
       const result = await creation;
       return result;
@@ -459,7 +402,6 @@ export async function getOrCreateUserBot(botId: number) {
       creatingBots.delete(botId);
     }
   } finally {
-    // Always release the global lock, even if we throw early
     globalCreationLock = false;
   }
 }
@@ -468,7 +410,6 @@ export function stopUserBot(botId: number) {
   const meta = activeBots.get(botId);
   if (meta) {
     try {
-      // Mark as not running immediately to prevent race conditions
       meta.isRunning = false;
       if (meta.bot.isRunning()) {
         meta.bot.stop();
@@ -486,10 +427,8 @@ export async function stopAllUserBots() {
   const stopPromises = Array.from(activeBots.entries()).map(
     async ([botId, meta]) => {
       try {
-        // Mark as not running immediately to prevent race conditions
         meta.isRunning = false;
 
-        // Check if bot is already stopped or stopping
         if (meta.bot.isRunning()) {
           await meta.bot.stop();
           logger.debug(
@@ -503,22 +442,19 @@ export async function stopAllUserBots() {
           );
         }
       } catch (e) {
-        // Log but don't fail the shutdown process for individual bot failures
         logger.warn(
           { e, botId, username: meta.username },
           "Error stopping personal bot during shutdown",
         );
       }
     },
-  ); // Wait for all stop operations to complete (or timeout after 10 seconds)
+  );
   await Promise.race([
     Promise.allSettled(stopPromises),
     new Promise((resolve) => setTimeout(resolve, 10000)),
   ]);
 
   activeBots.clear();
-
-  // Clear any in-flight bot creation processes
   creatingBots.clear();
 
   logger.info("All personal bots shutdown process completed");
@@ -533,7 +469,6 @@ export function clearFailedBots() {
   logger.info("Cleared failed bots list");
 }
 
-// Clear specific bot from failed bots list
 export function clearFailedBot(botId: number) {
   const wasRemoved = failedBots.delete(botId);
   if (wasRemoved) {
@@ -565,7 +500,6 @@ export function cleanupStaleBots() {
 export async function forceStopBot(botId: number) {
   logger.info({ botId }, "Force stopping bot - cleaning up all instances");
 
-  // Remove from active bots
   const meta = activeBots.get(botId);
   if (meta) {
     try {
@@ -579,15 +513,10 @@ export async function forceStopBot(botId: number) {
     activeBots.delete(botId);
   }
 
-  // Remove from creating bots
   creatingBots.delete(botId);
-
-  // Remove from failed bots to allow immediate restart
   failedBots.delete(botId);
 
-  // Wait a moment for cleanup to complete
   await new Promise((resolve) => setTimeout(resolve, 2000));
-
   logger.info({ botId }, "Force stop completed");
 }
 
@@ -597,7 +526,7 @@ export function getBotStatus() {
     active: activeBots.size,
     creating: creatingBots.size,
     failed: failedBots.size,
-    failedBotIds: Array.from(failedBots), // Add this for debugging
+    failedBotIds: Array.from(failedBots),
     details: Array.from(activeBots.entries()).map(([botId, meta]) => ({
       botId,
       username: meta.username,
@@ -617,54 +546,49 @@ export function getBotStatus() {
  */
 export function detectBotConflicts() {
   const conflicts = [];
-  
+
   for (const [botId, meta] of activeBots.entries()) {
-    // Check if bot is marked as running but actually stopped
     if (meta.isRunning && !meta.bot.isRunning()) {
       conflicts.push({
         botId,
         issue: "marked_running_but_stopped",
-        username: meta.username
+        username: meta.username,
       });
     }
-    
-    // Check if bot is in both active and creating states
+
     if (creatingBots.has(botId)) {
       conflicts.push({
         botId,
         issue: "in_both_active_and_creating",
-        username: meta.username
+        username: meta.username,
       });
     }
-    
-    // Check for high failure counts
+
     if (meta.failures > 3) {
       conflicts.push({
         botId,
         issue: "high_failure_count",
         failures: meta.failures,
-        username: meta.username
+        username: meta.username,
       });
     }
   }
-  
+
   if (conflicts.length > 0) {
     logger.warn({ conflicts }, "Detected potential bot instance conflicts");
   }
-  
+
   return conflicts;
 }
 
 export async function loadAllUserBotsOnStartup() {
   try {
-    // First, clean up any stale bot instances
     cleanupStaleBots();
 
-    const records = await UserBotModel.find({ status: "active" }).limit(500); // safety cap
+    const records = await UserBotModel.find({ status: "active" }).limit(500);
     logger.info({ count: records.length }, "Loading personal bots on startup");
 
     if (records.length === 0) {
-      // Check if there are any user bots at all
       const totalCount = await UserBotModel.countDocuments();
       const activeCount = await UserBotModel.countDocuments({
         status: "active",
@@ -683,7 +607,6 @@ export async function loadAllUserBotsOnStartup() {
         },
         "User bot status breakdown - no active bots found",
       );
-      startupComplete = true;
       return;
     }
 
@@ -691,12 +614,10 @@ export async function loadAllUserBotsOnStartup() {
     // Increase delays to ensure no overlap
     for (const [index, rec] of records.entries()) {
       try {
-        // Wait 5 seconds between each bot start to ensure no overlap (increased from 3)
         if (index > 0) {
           await new Promise((resolve) => setTimeout(resolve, 5000));
         }
 
-        // Skip if bot is already active
         if (activeBots.has(rec.botId)) {
           logger.debug(
             { botId: rec.botId },
@@ -710,8 +631,6 @@ export async function loadAllUserBotsOnStartup() {
           "Starting personal bot",
         );
         await getOrCreateUserBot(rec.botId);
-
-        // Wait longer to ensure the bot is fully started before continuing (increased from 1s)
         await new Promise((resolve) => setTimeout(resolve, 2000));
       } catch (err) {
         logger.error(
@@ -721,14 +640,10 @@ export async function loadAllUserBotsOnStartup() {
       }
     }
 
-    startupComplete = true;
     logger.info("Personal bot startup complete");
-
-    // Log final status
     const status = getBotStatus();
     logger.info(status, "Bot registry status after startup");
   } catch (err) {
     logger.error({ err }, "Error in loadAllUserBotsOnStartup");
-    startupComplete = true;
   }
 }

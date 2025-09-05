@@ -1,4 +1,4 @@
-import { BotContext } from "../telegram/bot";
+import type { BotContext } from "../telegram/bot";
 import { logger } from "../utils/logger";
 import { validatePostData } from "../middleware/validation";
 import { clearDraftSession } from "../middleware/sessionCleanup";
