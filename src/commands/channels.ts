@@ -152,7 +152,7 @@ export function registerChannelsCommands(
       }
 
       await ChannelModel.findOneAndUpdate(
-        { chatId },
+        { chatId, botId: ctx.me.id }, // Unique per bot, not per channel
         {
           $set: {
             chatId,

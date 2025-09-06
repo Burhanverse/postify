@@ -21,10 +21,11 @@ export class QueueManager {
       return;
     }
 
-    const channels = await getUserChannels(userId);
+    // Find the channel record for this specific bot
+    const channels = await getUserChannels(userId, ctx.me?.id);
     const selected = channels.find((c) => String(c.chatId) === chatId);
     if (!selected) {
-      await ctx.reply("Channel not found or not linked.");
+      await ctx.reply("Channel not found or not linked to this bot.");
       return;
     }
 

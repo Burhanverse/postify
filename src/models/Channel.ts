@@ -8,7 +8,7 @@ import {
 
 const ChannelSchema = new Schema(
   {
-    chatId: { type: Number, index: true, unique: true, required: true },
+    chatId: { type: Number, index: true, required: true }, // Remove unique constraint
     title: String,
     username: String,
     type: { type: String },
@@ -27,6 +27,7 @@ const ChannelSchema = new Schema(
 );
 
 ChannelSchema.index({ username: 1 });
+ChannelSchema.index({ chatId: 1, botId: 1 }, { unique: true }); // Compound unique index
 
 export type Channel = InferSchemaType<typeof ChannelSchema>;
 export type ChannelDoc = HydratedDocument<Channel> & { _id: Types.ObjectId };
