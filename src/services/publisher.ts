@@ -1,7 +1,8 @@
 import { PostModel, Post } from "../models/Post";
 import { Types } from "mongoose";
 import { logger } from "../utils/logger";
-import { InlineKeyboard, Bot } from "grammy";
+import { InlineKeyboard, Bot, InputFile } from "grammy";
+import { env } from "../config/env";
 import { ChannelModel, ChannelDoc } from "../models/Channel";
 import { UserBotModel } from "../models/UserBot";
 import { getExistingUserBot } from "./userBotRegistry";
@@ -152,21 +153,103 @@ async function publishWithBot(
       "Failed to send message to Telegram",
     );
 
-    if (err instanceof Error) {
-      const errorMsg = err.message.toLowerCase();
-      if (
-        errorMsg.includes("wrong file identifier") ||
-        errorMsg.includes("bad request") ||
-        errorMsg.includes("file_id")
-      ) {
-        logger.error(
-          { err, postId: post._id.toString(), chatId, botId: channel.botId },
-          "File identifier error - likely due to bot session mismatch. Using polling bot instance should prevent this.",
-        );
+    // Fallback: file_id might belong to a different bot. Try to fetch via the bot that captured it and reupload.
+    if (err instanceof Error && post.mediaFileId && post.type !== "text") {
+      const msg = err.message.toLowerCase();
+      const looksLikeFileIdIssue =
+        msg.includes("wrong file identifier") ||
+        msg.includes("file_id") ||
+        msg.includes("bad request");
+      if (looksLikeFileIdIssue) {
+        try {
+          logger.warn(
+            {
+              postId: post._id.toString(),
+              chatId,
+              mediaOwnerBotId: post.mediaOwnerBotId,
+              channelBotId: channel.botId,
+            },
+            "Attempting cross-bot media fallback: downloading via owner bot and reuploading",
+          );
+
+          // Create a short-lived bot with the original token to obtain file URL
+          const { UserBotModel } = await import("../models/UserBot");
+          const { decrypt } = await import("../utils/crypto");
+          let ownerToken: string | undefined;
+          if (post.mediaOwnerBotId) {
+            const ownerBotRecord = await UserBotModel.findOne({
+              botId: post.mediaOwnerBotId,
+            });
+            ownerToken = ownerBotRecord?.token || undefined;
+            if (ownerBotRecord?.tokenEncrypted) {
+              const dec = decrypt(ownerBotRecord.tokenEncrypted);
+              ownerToken = dec || ownerToken;
+            }
+          }
+
+          // If not found, as a last resort, try the main bot token from env if matches
+          let tempBot: Bot<BotContext> | null = null;
+          if (ownerToken) {
+            tempBot = new Bot<BotContext>(ownerToken);
+          } else if (env.BOT_TOKEN) {
+            tempBot = new Bot<BotContext>(env.BOT_TOKEN);
+          }
+
+          if (tempBot) {
+            // getFile to fetch file path, then construct file URL
+      const file = await tempBot.api.getFile(post.mediaFileId);
+      const fileUrl = `https://api.telegram.org/file/bot${tempBot.token}/${file.file_path}`;
+
+            if (post.type === "photo") {
+              sent = await personalBot.api.sendPhoto(
+                chatId,
+        new InputFile(new URL(fileUrl)),
+                { caption: post.text || undefined, ...sendOptions },
+              );
+            } else if (post.type === "video") {
+              sent = await personalBot.api.sendVideo(
+                chatId,
+        new InputFile(new URL(fileUrl)),
+                { caption: post.text || undefined, ...sendOptions },
+              );
+            }
+
+            logger.info(
+              { postId: post._id.toString(), chatId, messageId: sent?.message_id },
+              "Fallback succeeded: media reuploaded via source bot",
+            );
+          } else {
+            logger.warn(
+              { postId: post._id.toString(), chatId },
+              "Fallback unavailable: media owner bot token not found",
+            );
+          }
+        } catch (fallbackErr) {
+          logger.error(
+            { fallbackErr, postId: post._id.toString(), chatId },
+            "Cross-bot media fallback failed",
+          );
+          throw err;
+        }
+      } else {
+        throw err;
       }
+    } else {
+      throw err;
+    }
+  }
+
+    if (!sent) {
+      // If we reach here without throwing, ensure we don't continue with undefined
+      throw new Error("Failed to send message: no response from Telegram API");
     }
 
-    throw err;
+  // Extract new media file_id if available to avoid future cross-bot issues
+  let newMediaFileId: string | undefined;
+  if (post.type === "photo" && "photo" in sent && Array.isArray(sent.photo)) {
+    newMediaFileId = sent.photo.at(-1)?.file_id;
+  } else if (post.type === "video" && "video" in sent && sent.video) {
+    newMediaFileId = sent.video.file_id;
   }
 
   await PostModel.updateOne(
@@ -174,8 +257,11 @@ async function publishWithBot(
     {
       $set: {
         status: "published",
-        publishedMessageId: sent.message_id,
+        publishedMessageId: sent!.message_id,
         publishedAt: new Date(),
+        ...(newMediaFileId
+          ? { mediaFileId: newMediaFileId, mediaOwnerBotId: channel.botId }
+          : {}),
       },
     },
   );
@@ -183,7 +269,7 @@ async function publishWithBot(
   // Pin the message if requested
   if (post.pinAfterPosting) {
     try {
-      await personalBot.api.pinChatMessage(chatId, sent.message_id);
+      await personalBot.api.pinChatMessage(chatId, sent!.message_id);
 
       await PostModel.updateOne(
         { _id: post._id },
@@ -195,12 +281,12 @@ async function publishWithBot(
       );
 
       logger.info(
-        { postId: post._id.toString(), messageId: sent.message_id },
+        { postId: post._id.toString(), messageId: sent!.message_id },
         "Post pinned successfully using polling bot",
       );
     } catch (err) {
       logger.error(
-        { err, postId: post._id.toString(), messageId: sent.message_id },
+        { err, postId: post._id.toString(), messageId: sent!.message_id },
         "Failed to pin message after posting",
       );
       // Don't throw error for pinning failure - the post was still published successfully
@@ -208,7 +294,7 @@ async function publishWithBot(
   }
 
   logger.info(
-    { postId: post._id.toString(), messageId: sent.message_id },
+    { postId: post._id.toString(), messageId: sent!.message_id },
     "Post published",
   );
 }

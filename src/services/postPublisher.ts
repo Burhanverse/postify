@@ -123,6 +123,8 @@ export class PostPublisher {
         type: draft.postType || "text",
         text: draft.text?.trim() || undefined,
         mediaFileId: draft.mediaFileId || undefined,
+  // When drafting via main bot, media is captured by main bot; store its id for cross-bot handling
+  mediaOwnerBotId: ctx.me?.id,
         buttons: draft.buttons || [],
         pinAfterPosting,
       });

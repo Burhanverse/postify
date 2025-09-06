@@ -22,6 +22,8 @@ const PostSchema = new Schema(
     type: { type: String, enum: ["text", "photo", "video"], default: "text" },
     text: String,
     mediaFileId: String,
+  // Bot ID that originally captured mediaFileId. Needed to re-upload across bots if required.
+  mediaOwnerBotId: Number,
     buttons: [InlineButtonSchema],
     scheduledAt: Date,
     publishedMessageId: Number,

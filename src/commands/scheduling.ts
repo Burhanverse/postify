@@ -140,6 +140,7 @@ export async function handleScheduleCommand(
       type: ctx.session.draft.postType || "text",
       text: ctx.session.draft.text,
       mediaFileId: ctx.session.draft.mediaFileId,
+  mediaOwnerBotId: ctx.me?.id,
       buttons: ctx.session.draft.buttons,
       pinAfterPosting: ctx.session.scheduleWithPin || false,
     });
