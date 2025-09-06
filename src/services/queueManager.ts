@@ -102,10 +102,14 @@ export class QueueManager {
       return;
     }
 
-    // Check if user owns the channel
-    const channel = await ChannelModel.findById(post.channel);
-    if (!channel || !channel.owners.includes(userId)) {
-      await ctx.reply("You do not have permission to send this post.");
+    // Check if user owns the channel AND the channel belongs to current bot
+    const channel = await ChannelModel.findOne({
+      _id: post.channel,
+      owners: userId,
+      botId: ctx.me?.id, // Enforce current bot ownership
+    });
+    if (!channel) {
+      await ctx.reply("You do not have permission to send this post from this bot.");
       return;
     }
 
@@ -153,10 +157,14 @@ export class QueueManager {
       return;
     }
 
-    // Check if user owns the channel
-    const channel = await ChannelModel.findById(post.channel);
-    if (!channel || !channel.owners.includes(userId)) {
-      await ctx.reply("You do not have permission to cancel this post.");
+    // Check if user owns the channel AND the channel belongs to current bot
+    const channel = await ChannelModel.findOne({
+      _id: post.channel,
+      owners: userId,
+      botId: ctx.me?.id, // Enforce current bot ownership
+    });
+    if (!channel) {
+      await ctx.reply("You do not have permission to cancel this post from this bot.");
       return;
     }
 
@@ -182,8 +190,8 @@ export class QueueManager {
     }
 
     try {
-      // Get all channels for the user
-      const channels = await getUserChannels(userId);
+      // Get channels for this specific bot only
+      const channels = await getUserChannels(userId, ctx.me?.id);
 
       if (!channels.length) {
         await ctx.reply(

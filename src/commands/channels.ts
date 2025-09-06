@@ -3,9 +3,13 @@ import type { BotContext } from "../telegram/bot";
 import { ChannelModel } from "../models/Channel";
 import { logger } from "../utils/logger";
 
-export async function getUserChannels(userId?: number) {
+export async function getUserChannels(userId?: number, botId?: number) {
   if (!userId) return [];
-  return await ChannelModel.find({ owners: userId }).limit(25).lean();
+  const query: Record<string, unknown> = { owners: userId };
+  if (botId) {
+    query.botId = botId;
+  }
+  return await ChannelModel.find(query).limit(25).lean();
 }
 
 function buildChannelsKeyboard(
@@ -36,7 +40,10 @@ export function registerChannelsCommands(
   bot.command("channels", async (ctx) => {
     const uid = ctx.from?.id;
     if (!uid) return;
-    const channels = await ChannelModel.find({ owners: uid }).limit(25).lean();
+    const channels = await ChannelModel.find({ 
+      owners: uid,
+      ...(opts.enableLinking ? { botId: ctx.me.id } : {})
+    }).limit(25).lean();
     if (!channels.length) {
       await ctx.reply(
         opts.enableLinking

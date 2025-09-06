@@ -37,13 +37,14 @@ export class PostPublisher {
     const channel = await ChannelModel.findOne({
       chatId: ctx.session.selectedChannelChatId,
       owners: ctx.from?.id,
+      botId: ctx.me?.id, // Enforce current bot owns this channel
     });
 
   if (!channel) {
       return {
         success: false,
         error:
-          "**Channel not found!**\n\nPlease use /newpost to select a valid channel.",
+          "**Channel not found or not linked to this bot!**\n\nPlease use /newpost to select a channel that belongs to this personal bot.",
       };
     }
 

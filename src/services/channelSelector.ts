@@ -9,8 +9,10 @@ export class ChannelSelector {
    * Shows channel selection for new post creation
    */
   static async showChannelSelection(ctx: BotContext): Promise<void> {
-    // First, get user's channels
-    const channels = await getUserChannels(ctx.from?.id);
+    // First, get user's channels for this specific bot context
+    const userId = ctx.from?.id;
+    const botId = ctx.me?.id;
+    const channels = await getUserChannels(userId, botId);
 
     if (!channels.length) {
       await ctx.reply(
@@ -65,6 +67,7 @@ export class ChannelSelector {
     const channel = await ChannelModel.findOne({
       chatId: chatIdNum,
       owners: ctx.from?.id,
+      botId: ctx.me?.id, // Ensure channel belongs to this bot
     });
 
     if (!channel) {
@@ -89,6 +92,7 @@ export class ChannelSelector {
     const channel = await ChannelModel.findOne({
       chatId,
       owners: ctx.from?.id,
+      botId: ctx.me?.id, // Ensure channel belongs to this bot
     });
 
     if (!channel) {
@@ -135,7 +139,7 @@ export class ChannelSelector {
     delete ctx.session.selectedChannelChatId;
 
     // Trigger new post flow - call the newpost command handler logic
-    const channels = await getUserChannels(ctx.from?.id);
+    const channels = await getUserChannels(ctx.from?.id, ctx.me?.id);
 
     if (!channels || channels.length === 0) {
       await ctx.editMessageText(
