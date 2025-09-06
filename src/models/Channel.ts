@@ -8,7 +8,7 @@ import {
 
 const ChannelSchema = new Schema(
   {
-    chatId: { type: Number, index: true, required: true }, // Remove unique constraint
+    chatId: { type: Number, index: false, required: true }, // Disable automatic index
     title: String,
     username: String,
     type: { type: String },
