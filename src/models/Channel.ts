@@ -8,7 +8,7 @@ import {
 
 const ChannelSchema = new Schema(
   {
-    chatId: { type: Number, index: false, required: true }, // Disable automatic index
+    chatId: { type: Number, required: true }, // No index here
     title: String,
     username: String,
     type: { type: String },
@@ -20,7 +20,7 @@ const ChannelSchema = new Schema(
       canEdit: Boolean,
       canDelete: Boolean,
     },
-    botId: { type: Number, index: true },
+    botId: { type: Number }, // No index here to avoid duplicate
     createdAt: { type: Date, default: Date.now },
   },
   { 
