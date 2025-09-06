@@ -39,7 +39,7 @@ export class PostPublisher {
       owners: ctx.from?.id,
     });
 
-    if (!channel) {
+  if (!channel) {
       return {
         success: false,
         error:
@@ -47,7 +47,7 @@ export class PostPublisher {
       };
     }
 
-    if (!channel.botId) {
+  if (!channel.botId) {
       return {
         success: false,
         error:
@@ -61,7 +61,7 @@ export class PostPublisher {
       status: "active",
     });
 
-    if (!userBotRecord) {
+  if (!userBotRecord) {
       // Check if there's a bot record with different status
       const anyBotRecord = await UserBotModel.findOne({ botId: channel.botId });
       if (anyBotRecord) {
@@ -87,6 +87,20 @@ export class PostPublisher {
         success: false,
         error:
           "**Personal bot not loaded**\n\nYour personal bot is registered but not loaded in memory. Try restarting the main application or use /mybot to check status.",
+      };
+    }
+
+    // Security: if this is a media post, enforce that media was created via the same personal bot
+    const draftForSecurity = ctx.session.draft;
+    if (
+      draftForSecurity?.mediaFileId &&
+      (draftForSecurity.postType === "photo" || draftForSecurity.postType === "video") &&
+      ctx.me?.id !== channel.botId
+    ) {
+      return {
+        success: false,
+        error:
+          "**Media must be created via your personal bot**\n\nThis post contains media. For security and reliability, upload media using your personal bot for this channel, then send or schedule from there.",
       };
     }
 

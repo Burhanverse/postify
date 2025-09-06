@@ -119,15 +119,17 @@ export class QueueManager {
     try {
       const { publishPost } = await import("./publisher");
       await publishPost(post);
-      post.status = "published";
-      post.publishedAt = new Date();
-      await post.save();
       await ctx.reply("Posted successfully.");
     } catch (err) {
-      await ctx.reply(
-        "Failed to send post: " +
-          (err instanceof Error ? err.message : String(err)),
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      // Security-specific messaging for cross-bot binding
+      if (msg.includes("bound to bot") || msg.includes("Refusing to publish")) {
+        await ctx.reply(
+          "This post is bound to a different personal bot. Please send it from the bot that created it, or recreate the post via the current personal bot.",
+        );
+        return;
+      }
+      await ctx.reply("Failed to send post: " + msg);
     }
   }
 
