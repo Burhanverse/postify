@@ -23,11 +23,17 @@ const ChannelSchema = new Schema(
     botId: { type: Number, index: true },
     createdAt: { type: Date, default: Date.now },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+    // Disable automatic index creation to prevent conflicts
+    autoIndex: false
+  },
 );
 
+// Manually define only the indexes we want
 ChannelSchema.index({ username: 1 });
-ChannelSchema.index({ chatId: 1, botId: 1 }, { unique: true }); // Compound unique index
+ChannelSchema.index({ botId: 1 });
+ChannelSchema.index({ chatId: 1, botId: 1 }, { unique: true, name: 'channel_bot_unique' }); // Compound unique index with custom name
 
 export type Channel = InferSchemaType<typeof ChannelSchema>;
 export type ChannelDoc = HydratedDocument<Channel> & { _id: Types.ObjectId };
