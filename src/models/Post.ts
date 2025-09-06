@@ -24,6 +24,8 @@ const PostSchema = new Schema(
     mediaFileId: String,
   // Bot ID that originally captured mediaFileId. Needed to re-upload across bots if required.
   mediaOwnerBotId: Number,
+  // Bot ID that must publish this post. Prevents cross-bot publishing.
+  publisherBotId: { type: Number, index: true },
     buttons: [InlineButtonSchema],
     scheduledAt: Date,
     publishedMessageId: Number,

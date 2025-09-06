@@ -125,6 +125,8 @@ export class PostPublisher {
         mediaFileId: draft.mediaFileId || undefined,
   // When drafting via main bot, media is captured by main bot; store its id for cross-bot handling
   mediaOwnerBotId: ctx.me?.id,
+  // Lock publisher bot to the channel's current personal bot
+  publisherBotId: channel.botId,
         buttons: draft.buttons || [],
         pinAfterPosting,
       });

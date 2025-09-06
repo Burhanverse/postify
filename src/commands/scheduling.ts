@@ -141,6 +141,7 @@ export async function handleScheduleCommand(
       text: ctx.session.draft.text,
       mediaFileId: ctx.session.draft.mediaFileId,
   mediaOwnerBotId: ctx.me?.id,
+  publisherBotId: channel.botId,
       buttons: ctx.session.draft.buttons,
       pinAfterPosting: ctx.session.scheduleWithPin || false,
     });
