@@ -73,9 +73,6 @@ registerPostCommands(bot);
 registerAdminCommands(bot);
 registerOwnerCommands(bot);
 
-// Callback dispatcher
-bot.on("callback_query:data", async (_ctx) => {});
-
 // Enhanced error handling
 bot.catch((err) => {
   const { ctx, error } = err;

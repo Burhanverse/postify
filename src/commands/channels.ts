@@ -213,41 +213,80 @@ export async function handleChannelCallback(ctx: BotContext) {
       .text("Unlink", `ch:u:${channel.chatId}`)
       .row()
       .text("Back", "ch:list");
-    await ctx.editMessageText(text, { reply_markup: kb });
+    try {
+      await ctx.editMessageText(text, { reply_markup: kb });
+    } catch (error) {
+      // If message edit fails, send a new message instead
+      logger.debug({ error }, "Failed to edit message, sending new one");
+      await ctx.answerCallbackQuery();
+      await ctx.reply(text, { reply_markup: kb });
+    }
   } else if (action === "u" && channel) {
     const kb = new InlineKeyboard()
       .text("Confirm unlink", `ch:uc:${chatId}`)
       .row()
       .text("Cancel", `ch:i:${chatId}`);
     await ctx.answerCallbackQuery();
-    await ctx.editMessageReplyMarkup({ reply_markup: kb });
+    try {
+      await ctx.editMessageReplyMarkup({ reply_markup: kb });
+    } catch (error) {
+      // If edit fails, ignore gracefully
+      logger.debug({ error }, "Failed to edit message markup");
+    }
   } else if (action === "uc" && channel) {
     await ChannelModel.updateOne(
       { chatId },
       { $pull: { owners: ctx.from?.id } },
     );
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText(
-      `**Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`,
-      { parse_mode: "Markdown" },
-    );
+    try {
+      await ctx.editMessageText(
+        `**Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`,
+        { parse_mode: "Markdown" },
+      );
+    } catch (error) {
+      // If message edit fails, send a new message instead
+      logger.debug({ error }, "Failed to edit message, sending new one");
+      await ctx.reply(
+        `**Channel unlinked**\n\nChannel "${channel.title || channel.username || channel.chatId}" has been removed from your account.`,
+        { parse_mode: "Markdown" },
+      );
+    }
   } else if (action === "list") {
     const channels = await ChannelModel.find({ owners: ctx.from?.id })
       .limit(25)
       .lean();
     if (!channels.length) {
       await ctx.answerCallbackQuery();
-      await ctx.editMessageText(
-        "**No channels linked**\n\nUse /addchannel to connect your first channel.",
-        { parse_mode: "Markdown" },
-      );
+      try {
+        await ctx.editMessageText(
+          "**No channels linked**\n\nUse /addchannel to connect your first channel.",
+          { parse_mode: "Markdown" },
+        );
+      } catch (error) {
+        // If message edit fails, send a new message instead
+        logger.debug({ error }, "Failed to edit message, sending new one");
+        await ctx.reply(
+          "**No channels linked**\n\nUse /addchannel to connect your first channel.",
+          { parse_mode: "Markdown" },
+        );
+      }
       return true;
     }
     await ctx.answerCallbackQuery();
-    await ctx.editMessageText("**Your channels:**", {
-      reply_markup: buildChannelsKeyboard(channels),
-      parse_mode: "Markdown",
-    });
+    try {
+      await ctx.editMessageText("**Your channels:**", {
+        reply_markup: buildChannelsKeyboard(channels),
+        parse_mode: "Markdown",
+      });
+    } catch (error) {
+      // If message edit fails, send a new message instead
+      logger.debug({ error }, "Failed to edit message, sending new one");
+      await ctx.reply("**Your channels:**", {
+        reply_markup: buildChannelsKeyboard(channels),
+        parse_mode: "Markdown",
+      });
+    }
   }
   return true;
 }
