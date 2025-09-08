@@ -208,6 +208,7 @@ export async function handleChannelCallback(ctx: BotContext) {
   }
 
   if (action === "i" && channel) {
+    await ctx.answerCallbackQuery();
     const text = `Channel Info\nTitle: ${channel.title}\nUsername: ${channel.username ? "@" + channel.username : "—"}\nChatId: ${channel.chatId}`;
     const kb = new InlineKeyboard()
       .text("Unlink", `ch:u:${channel.chatId}`)
@@ -218,20 +219,21 @@ export async function handleChannelCallback(ctx: BotContext) {
     } catch (error) {
       // If message edit fails, send a new message instead
       logger.debug({ error }, "Failed to edit message, sending new one");
-      await ctx.answerCallbackQuery();
       await ctx.reply(text, { reply_markup: kb });
     }
   } else if (action === "u" && channel) {
+    await ctx.answerCallbackQuery();
     const kb = new InlineKeyboard()
       .text("Confirm unlink", `ch:uc:${chatId}`)
       .row()
       .text("Cancel", `ch:i:${chatId}`);
-    await ctx.answerCallbackQuery();
     try {
       await ctx.editMessageReplyMarkup({ reply_markup: kb });
     } catch (error) {
-      // If edit fails, ignore gracefully
-      logger.debug({ error }, "Failed to edit message markup");
+      // If edit fails, send new message with current text
+      logger.debug({ error }, "Failed to edit message markup, sending new message");
+      const currentText = `Channel Info\nTitle: ${channel.title}\nUsername: ${channel.username ? "@" + channel.username : "—"}\nChatId: ${channel.chatId}`;
+      await ctx.reply(currentText, { reply_markup: kb });
     }
   } else if (action === "uc" && channel) {
     await ChannelModel.updateOne(
@@ -253,11 +255,11 @@ export async function handleChannelCallback(ctx: BotContext) {
       );
     }
   } else if (action === "list") {
+    await ctx.answerCallbackQuery();
     const channels = await ChannelModel.find({ owners: ctx.from?.id })
       .limit(25)
       .lean();
     if (!channels.length) {
-      await ctx.answerCallbackQuery();
       try {
         await ctx.editMessageText(
           "**No channels linked**\n\nUse /addchannel to connect your first channel.",
@@ -273,7 +275,6 @@ export async function handleChannelCallback(ctx: BotContext) {
       }
       return true;
     }
-    await ctx.answerCallbackQuery();
     try {
       await ctx.editMessageText("**Your channels:**", {
         reply_markup: buildChannelsKeyboard(channels),
