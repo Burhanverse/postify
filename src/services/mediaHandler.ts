@@ -1,4 +1,4 @@
-import type { Message, PhotoSize, Video } from "grammy/types";
+import type { Message, PhotoSize, Video, Animation } from "grammy/types";
 import type { BotContext } from "../telegram/bot";
 import { DraftManager } from "./draftManager";
 
@@ -38,6 +38,23 @@ export class MediaHandler {
   }
 
   /**
+   * Processes GIF/animation messages for drafts
+   */
+  static async handleAnimationMessage(
+    ctx: BotContext,
+    message: Message,
+  ): Promise<boolean> {
+    if (!ctx.session.draft || ctx.session.draftLocked) return false;
+
+    const animation = this.extractAnimation(message);
+    if (!animation) return false;
+
+    const caption = this.extractCaption(message);
+    await DraftManager.processMediaInput(ctx, "gif", animation.file_id, caption);
+    return true;
+  }
+
+  /**
    * Safely extracts photo from message
    */
   private static extractPhoto(message: Message): PhotoSize | undefined {
@@ -51,6 +68,14 @@ export class MediaHandler {
   private static extractVideo(message: Message): Video | undefined {
     if (!this.hasVideo(message)) return undefined;
     return message.video;
+  }
+
+  /**
+   * Safely extracts animation/gif from message
+   */
+  private static extractAnimation(message: Message): Animation | undefined {
+    if (!this.hasAnimation(message)) return undefined;
+    return message.animation;
   }
 
   /**
@@ -79,6 +104,17 @@ export class MediaHandler {
   ): message is Message & { video: Video } {
     if (!("video" in message)) return false;
     const candidate = (message as { video?: unknown }).video;
+    return typeof candidate === "object" && candidate !== null;
+  }
+
+  /**
+   * Type guard for animation/gif messages
+   */
+  private static hasAnimation(
+    message: Message,
+  ): message is Message & { animation: Animation } {
+    if (!("animation" in message)) return false;
+    const candidate = (message as { animation?: unknown }).animation;
     return typeof candidate === "object" && candidate !== null;
   }
 }

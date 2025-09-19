@@ -6,7 +6,7 @@ import { Types } from "mongoose";
 import { clearAllDraftData } from "../middleware/sessionCleanup";
 
 interface DraftData {
-  postType?: "text" | "photo" | "video";
+  postType?: "text" | "photo" | "video" | "gif";
   text?: string;
   mediaFileId?: string;
   buttons?: Array<{ text: string; url?: string; callbackData?: string }>;
@@ -95,7 +95,7 @@ export class PostPublisher {
     const draftForSecurity = ctx.session.draft;
     if (
       draftForSecurity?.mediaFileId &&
-      (draftForSecurity.postType === "photo" || draftForSecurity.postType === "video") &&
+      (draftForSecurity.postType === "photo" || draftForSecurity.postType === "video" || draftForSecurity.postType === "gif") &&
       ctx.me?.id !== channel.botId
     ) {
       return {
@@ -187,7 +187,7 @@ export class PostPublisher {
     try {
       if (
         draft.mediaFileId &&
-        (draft.postType === "photo" || draft.postType === "video")
+        (draft.postType === "photo" || draft.postType === "video" || draft.postType === "gif")
       ) {
         await ctx.reply(message, { parse_mode: "Markdown" });
       } else {
@@ -215,7 +215,7 @@ export class PostPublisher {
       try {
         if (
           draft.mediaFileId &&
-          (draft.postType === "photo" || draft.postType === "video")
+          (draft.postType === "photo" || draft.postType === "video" || draft.postType === "gif")
         ) {
           await ctx.reply(message, { parse_mode: "Markdown" });
         } else {

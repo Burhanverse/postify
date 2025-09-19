@@ -24,7 +24,6 @@ class RateLimiter {
       "photo_upload",
       "video_upload",
       "callback:draft",
-      "callback:draft:type",
     ];
     this.exemptActions = new Set([
       ...defaults,

@@ -51,7 +51,7 @@ export async function validationMiddleware(
     }
 
     // Validate file uploads
-    if (ctx.message?.photo || ctx.message?.video) {
+    if (ctx.message?.photo || ctx.message?.video || ctx.message?.animation) {
       const validationResult = await validateMediaUpload(ctx);
       if (!validationResult.valid) {
         await ctx.reply(validationResult.message);

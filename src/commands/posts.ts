@@ -50,13 +50,17 @@ export function registerPostCommands(bot: Bot<BotContext>) {
   });
 
   // Media handlers
-  bot.on(["message:photo", "message:video"], async (ctx, next) => {
+  bot.on(["message:photo", "message:video", "message:animation"], async (ctx, next) => {
     const msg = ctx.message;
     if ("photo" in msg && (await MediaHandler.handlePhotoMessage(ctx, msg))) {
       return;
     }
 
     if ("video" in msg && (await MediaHandler.handleVideoMessage(ctx, msg))) {
+      return;
+    }
+
+    if ("animation" in msg && (await MediaHandler.handleAnimationMessage(ctx, msg))) {
       return;
     }
 

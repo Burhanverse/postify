@@ -19,11 +19,6 @@ export class DraftManager {
     if (!d) return;
 
     const kb = new InlineKeyboard();
-    // Row: type switch
-    kb.text(d.postType === "text" ? "Text" : "Text", "draft:type:text")
-      .text(d.postType === "photo" ? "Photo" : "Photo", "draft:type:photo")
-      .text(d.postType === "video" ? "Video" : "Video", "draft:type:video")
-      .row();
     kb.text("Add Button", "draft:addbtn")
       .text("Manage Buttons", "draft:managebtns")
       .row();
@@ -41,7 +36,7 @@ export class DraftManager {
         try {
           if (
             d.mediaFileId &&
-            (d.postType === "photo" || d.postType === "video")
+            (d.postType === "photo" || d.postType === "video" || d.postType === "gif")
           ) {
             await ctx.api.editMessageCaption(ctx.chat!.id, existingId, {
               caption,
@@ -69,6 +64,12 @@ export class DraftManager {
         });
       } else if (d.mediaFileId && d.postType === "video") {
         sent = await ctx.replyWithVideo(d.mediaFileId, {
+          caption,
+          reply_markup: kb,
+          parse_mode: "HTML",
+        });
+      } else if (d.mediaFileId && d.postType === "gif") {
+        sent = await ctx.replyWithAnimation(d.mediaFileId, {
           caption,
           reply_markup: kb,
           parse_mode: "HTML",
@@ -145,11 +146,11 @@ export class DraftManager {
   }
 
   /**
-   * Processes media input (photos/videos)
+   * Processes media input (photos/videos/gifs)
    */
   static async processMediaInput(
     ctx: BotContext,
-    mediaType: "photo" | "video",
+    mediaType: "photo" | "video" | "gif",
     fileId: string,
     caption?: string,
   ): Promise<void> {

@@ -88,14 +88,6 @@ function hello() {
 <blockquote>This is a quote</blockquote>
 ```
 
-## Credits:
-
-AI assistants that helped in the development of this project:
-
-- Claude 4
-- ChatGPT 5
-- Gemini 2.5 Pro
-
 <div align="center">
 
 <i>Made with ❤️ by Burhanverse</i>

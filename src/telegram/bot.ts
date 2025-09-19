@@ -16,7 +16,7 @@ import { logger } from "../utils/logger";
 
 export interface SessionData {
   draft?: {
-    postType?: "text" | "photo" | "video";
+    postType?: "text" | "photo" | "video" | "gif";
     text?: string;
     mediaFileId?: string;
     buttons?: {

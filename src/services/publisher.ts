@@ -96,6 +96,11 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
         caption: post.text || undefined,
         ...sendOptions,
       });
+    } else if (post.type === "gif" && post.mediaFileId) {
+      sent = await personalBot.api.sendAnimation(chatId, post.mediaFileId, {
+        caption: post.text || undefined,
+        ...sendOptions,
+      });
     } else {
       sent = await personalBot.api.sendMessage(
         chatId,
@@ -121,6 +126,8 @@ export async function publishPost(post: Post & { _id: Types.ObjectId }) {
     newMediaFileId = sent.photo.at(-1)?.file_id;
   } else if (post.type === "video" && sent.video) {
     newMediaFileId = sent.video.file_id;
+  } else if (post.type === "gif" && sent.animation) {
+    newMediaFileId = sent.animation.file_id;
   }
 
   await PostModel.updateOne(

@@ -19,12 +19,10 @@ const PostSchema = new Schema(
       enum: ["draft", "scheduled", "published"],
       index: true,
     },
-    type: { type: String, enum: ["text", "photo", "video"], default: "text" },
+    type: { type: String, enum: ["text", "photo", "video", "gif"], default: "text" },
     text: String,
     mediaFileId: String,
-  // Bot ID that originally captured mediaFileId. Needed to re-upload across bots if required.
   mediaOwnerBotId: Number,
-  // Bot ID that must publish this post. Prevents cross-bot publishing.
   publisherBotId: { type: Number, index: true },
     buttons: [InlineButtonSchema],
     scheduledAt: Date,

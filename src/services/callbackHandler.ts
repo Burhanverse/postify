@@ -104,16 +104,6 @@ export class CallbackHandler {
     const [, action, value] = data.split(":");
 
     switch (action) {
-      case "type":
-        ctx.session.draft.postType = value as "text" | "photo" | "video";
-        if (value === "text") delete ctx.session.draft.mediaFileId;
-        delete ctx.session.lastDraftTextMessageId;
-        delete ctx.session.draftSourceMessages;
-        delete ctx.session.initialDraftMessageId;
-        await ctx.answerCallbackQuery();
-        await DraftManager.renderDraftPreview(ctx);
-        return true;
-
       case "send":
         await ctx.answerCallbackQuery();
         await PostPublisher.showSendingOptions(ctx);
