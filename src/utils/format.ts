@@ -8,38 +8,23 @@ function escapeHtml(s: string): string {
 export function formatToHtml(raw: string): string {
   if (!raw) return "";
 
-  // First, extract and preserve special blocks that shouldn't be processed for nested tags
   const preservedTags: string[] = [];
   let text = raw;
 
-  // Extract and preserve <pre> blocks first (to avoid processing content inside)
   text = text.replace(/<pre>([\s\S]*?)<\/pre>/gi, (_m, content) => {
     const idx = preservedTags.length;
     preservedTags.push(`<pre><code>${escapeHtml(content)}</code></pre>`);
     return `[[PRESERVED_${idx}]]`;
   });
 
-  // Extract and preserve <blockquote> blocks
-  text = text.replace(
-    /<blockquote>([\s\S]*?)<\/blockquote>/gi,
-    (_m, content) => {
-      const idx = preservedTags.length;
-      preservedTags.push(`<blockquote>${escapeHtml(content)}</blockquote>`);
-      return `[[PRESERVED_${idx}]]`;
-    },
-  );
-
-  // Extract and preserve <code> blocks (inline code)
   text = text.replace(/<code>(.*?)<\/code>/gi, (_m, content) => {
     const idx = preservedTags.length;
     preservedTags.push(`<code>${escapeHtml(content)}</code>`);
     return `[[PRESERVED_${idx}]]`;
   });
 
-  // Process nested bold and italic tags properly
-  text = parseNestedFormattingTags(text);
+  text = parseAllHtmlTags(text);
 
-  // Restore preserved tags
   text = text.replace(
     /\[\[PRESERVED_(\d+)]]/g,
     (_m, i) => preservedTags[Number(i)] || "",
@@ -48,19 +33,23 @@ export function formatToHtml(raw: string): string {
   return text;
 }
 
-function parseNestedFormattingTags(text: string): string {
-  // Parse and convert user-typed formatting tags to proper HTML
-  // This handles nested tags properly by using a stack-based approach
-  
-  const tagRegex = /<\/?([bi])>/gi;
-  const tokens: Array<{ type: 'text' | 'open' | 'close', tag?: string, content: string, pos: number }> = [];
+function parseAllHtmlTags(text: string): string {
+  // Parse and convert user-typed HTML tags to proper HTML
+  // This handles any HTML tag with proper nesting using a stack-based approach
+
+  const tagRegex = /<\/?([a-zA-Z][a-zA-Z0-9]*)\b[^>]*>/gi;
+  const tokens: Array<{ 
+    type: 'text' | 'open' | 'close' | 'selfclosing',
+    tag?: string,
+    content: string,
+    pos: number,
+    attributes?: string
+  }> = [];
   
   let lastIndex = 0;
   let match;
   
-  // Tokenize the input
   while ((match = tagRegex.exec(text)) !== null) {
-    // Add text before this tag
     if (match.index > lastIndex) {
       tokens.push({
         type: 'text',
@@ -69,19 +58,39 @@ function parseNestedFormattingTags(text: string): string {
       });
     }
     
-    // Add the tag
-    const isClosing = match[0].startsWith('</');
-    tokens.push({
-      type: isClosing ? 'close' : 'open',
-      tag: match[1].toLowerCase(),
-      content: match[0],
-      pos: match.index
-    });
+    const fullMatch = match[0];
+    const tagName = match[1].toLowerCase();
+    
+    if (fullMatch.startsWith('</')) {
+      tokens.push({
+        type: 'close',
+        tag: tagName,
+        content: fullMatch,
+        pos: match.index
+      });
+    } else if (fullMatch.endsWith('/>') || ['br', 'hr', 'img', 'input', 'meta', 'link'].includes(tagName)) {
+      const attributes = extractAttributes(fullMatch);
+      tokens.push({
+        type: 'selfclosing',
+        tag: tagName,
+        content: fullMatch,
+        pos: match.index,
+        attributes
+      });
+    } else {
+      const attributes = extractAttributes(fullMatch);
+      tokens.push({
+        type: 'open',
+        tag: tagName,
+        content: fullMatch,
+        pos: match.index,
+        attributes
+      });
+    }
     
     lastIndex = match.index + match[0].length;
   }
   
-  // Add remaining text
   if (lastIndex < text.length) {
     tokens.push({
       type: 'text',
@@ -90,37 +99,87 @@ function parseNestedFormattingTags(text: string): string {
     });
   }
   
-  // Process tokens with a stack to handle nesting
-  const stack: string[] = [];
+  const stack: Array<{tag: string, attributes?: string}> = [];
   let result = '';
   
   for (const token of tokens) {
     if (token.type === 'text') {
-      // Escape HTML in text content
       result += escapeHtml(token.content);
+    } else if (token.type === 'selfclosing') {
+      if (token.attributes) {
+        result += `<${token.tag}${token.attributes}>`;
+      } else {
+        result += `<${token.tag}>`;
+      }
     } else if (token.type === 'open') {
-      // Opening tag
-      stack.push(token.tag!);
-      result += `<${token.tag}>`;
+      stack.push({tag: token.tag!, attributes: token.attributes});
+      if (token.attributes) {
+        result += `<${token.tag}${token.attributes}>`;
+      } else {
+        result += `<${token.tag}>`;
+      }
     } else if (token.type === 'close') {
-      // Closing tag - find matching opening tag in stack
-      const tagIndex = stack.lastIndexOf(token.tag!);
+      let tagIndex = -1;
+      for (let i = stack.length - 1; i >= 0; i--) {
+        if (stack[i].tag === token.tag) {
+          tagIndex = i;
+          break;
+        }
+      }
       if (tagIndex !== -1) {
-        // Close all tags from the top of stack down to the matching tag
         const tagsToClose = stack.splice(tagIndex);
-        tagsToClose.reverse().forEach(tag => {
-          result += `</${tag}>`;
+        tagsToClose.reverse().forEach(stackItem => {
+          result += `</${stackItem.tag}>`;
         });
       }
-      // If no matching opening tag found, ignore the closing tag
     }
   }
   
-  // Close any remaining open tags
   while (stack.length > 0) {
-    const tag = stack.pop();
-    result += `</${tag}>`;
+    const stackItem = stack.pop();
+    if (stackItem) {
+      result += `</${stackItem.tag}>`;
+    }
   }
   
   return result;
+}
+
+function extractAttributes(tagString: string): string {
+  // Extract attributes from a tag string like '<a href="..." class="...">'
+  // Returns the attributes part with leading space, or empty string if none
+  
+  const match = tagString.match(/<[a-zA-Z][a-zA-Z0-9]*\b([^>]*?)>/);
+  if (!match || !match[1]) return '';
+  
+  const attributePart = match[1].trim();
+  if (!attributePart) return '';
+  
+  const attrRegex = /([a-zA-Z][a-zA-Z0-9-]*)\s*=\s*["']([^"']*)["']/g;
+  const sanitizedAttrs: string[] = [];
+  let attrMatch;
+  
+  while ((attrMatch = attrRegex.exec(attributePart)) !== null) {
+    const attrName = attrMatch[1].toLowerCase();
+    const attrValue = attrMatch[2];
+
+    let sanitizedValue: string;
+    if (attrName === 'href' || attrName === 'src') {
+      sanitizedValue = attrValue.replace(/[<>"']/g, (char) => {
+        switch (char) {
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          case "'": return '&#x27;';
+          default: return char;
+        }
+      });
+    } else {
+      sanitizedValue = escapeHtml(attrValue);
+    }
+    
+    sanitizedAttrs.push(`${attrName}="${sanitizedValue}"`);
+  }
+  
+  return sanitizedAttrs.length > 0 ? ' ' + sanitizedAttrs.join(' ') : '';
 }
