@@ -8,7 +8,7 @@ function escapeHtml(s: string): string {
 export function formatToHtml(raw: string): string {
   if (!raw) return "";
 
-  // First, extract properly formatted tags to preserve them
+  // First, extract and preserve special blocks that shouldn't be processed for nested tags
   const preservedTags: string[] = [];
   let text = raw;
 
@@ -36,12 +36,8 @@ export function formatToHtml(raw: string): string {
     return `[[PRESERVED_${idx}]]`;
   });
 
-  // Now escape the remaining text
-  text = escapeHtml(text);
-
-  // Process bold and italic tags on the escaped text
-  text = text.replace(/&lt;b&gt;(.*?)&lt;\/b&gt;/gi, "<b>$1</b>");
-  text = text.replace(/&lt;i&gt;(.*?)&lt;\/i&gt;/gi, "<i>$1</i>");
+  // Process nested bold and italic tags properly
+  text = parseNestedFormattingTags(text);
 
   // Restore preserved tags
   text = text.replace(
@@ -50,4 +46,81 @@ export function formatToHtml(raw: string): string {
   );
 
   return text;
+}
+
+function parseNestedFormattingTags(text: string): string {
+  // Parse and convert user-typed formatting tags to proper HTML
+  // This handles nested tags properly by using a stack-based approach
+  
+  const tagRegex = /<\/?([bi])>/gi;
+  const tokens: Array<{ type: 'text' | 'open' | 'close', tag?: string, content: string, pos: number }> = [];
+  
+  let lastIndex = 0;
+  let match;
+  
+  // Tokenize the input
+  while ((match = tagRegex.exec(text)) !== null) {
+    // Add text before this tag
+    if (match.index > lastIndex) {
+      tokens.push({
+        type: 'text',
+        content: text.slice(lastIndex, match.index),
+        pos: lastIndex
+      });
+    }
+    
+    // Add the tag
+    const isClosing = match[0].startsWith('</');
+    tokens.push({
+      type: isClosing ? 'close' : 'open',
+      tag: match[1].toLowerCase(),
+      content: match[0],
+      pos: match.index
+    });
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    tokens.push({
+      type: 'text',
+      content: text.slice(lastIndex),
+      pos: lastIndex
+    });
+  }
+  
+  // Process tokens with a stack to handle nesting
+  const stack: string[] = [];
+  let result = '';
+  
+  for (const token of tokens) {
+    if (token.type === 'text') {
+      // Escape HTML in text content
+      result += escapeHtml(token.content);
+    } else if (token.type === 'open') {
+      // Opening tag
+      stack.push(token.tag!);
+      result += `<${token.tag}>`;
+    } else if (token.type === 'close') {
+      // Closing tag - find matching opening tag in stack
+      const tagIndex = stack.lastIndexOf(token.tag!);
+      if (tagIndex !== -1) {
+        // Close all tags from the top of stack down to the matching tag
+        const tagsToClose = stack.splice(tagIndex);
+        tagsToClose.reverse().forEach(tag => {
+          result += `</${tag}>`;
+        });
+      }
+      // If no matching opening tag found, ignore the closing tag
+    }
+  }
+  
+  // Close any remaining open tags
+  while (stack.length > 0) {
+    const tag = stack.pop();
+    result += `</${tag}>`;
+  }
+  
+  return result;
 }
