@@ -1,6 +1,6 @@
 {
   "name": "postify",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Telegram channel management bot built with TypeScript, grammy, MongoDB & Agenda to manage your channel contents effortlessly!",
   "private": true,
   "type": "module",
@@ -8,6 +8,7 @@
     "node": ">=21"
   },
   "scripts": {
+        "start": "node dist/src/index.js",
     "dev": "tsx watch src/index.ts",
     "clean": "rimraf dist",
     "build": "npm run clean && tsc -p tsconfig.json && node post-build.mjs",

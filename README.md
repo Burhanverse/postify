@@ -56,6 +56,22 @@ npm install
 npm run dev
 ```
 
+## Production Usage
+
+To run Postify in production, first build the project:
+
+```bash
+npm run build
+```
+
+Then start the bot using:
+
+```bash
+npm start
+```
+
+This will run the compiled code from the `dist` directory.
+
 ### Tests:
 
 Run unit tests:
